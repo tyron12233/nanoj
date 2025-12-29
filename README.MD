@@ -24,10 +24,17 @@ Java completion combines **persistent indexes** (fast lookups) with **javac** wh
 
 ### Indexing
 
-- Persistent MapDB-backed indexes with **schema/version invalidation** and staleness clearing.
-- Shared read-only indexes ([`SHARED_INDEXES.md`](SHARED_INDEXES.md)) support (mount/bundle prebuilt indexes).
-- Index queries support both value iteration and **key-aware prefix** processing (used for package completion).
-- “Dumb mode” gating for features that should wait for indexing.
+- Persistent MapDB-backed indexes with **schema/version invalidation** and per-index staleness.
+- Two-map storage model (see [`MapDBIndexWrapper`](core/src/main/java/com/tyron/nanoj/core/indexing/MapDBIndexWrapper.java)):
+	- inverted: `key -> [fileId + valuePacket...]`
+	- forward: `fileId -> [keys...]` for invalidation on edits
+- Streaming query APIs on [`IndexManager`](core/src/main/java/com/tyron/nanoj/core/indexing/IndexManager.java): `processValues(...)`, `processPrefix(...)`, `search(...)` with [`SearchScope`](core/src/main/java/com/tyron/nanoj/core/indexing/SearchScope.java) / [`Scopes`](core/src/main/java/com/tyron/nanoj/core/indexing/Scopes.java)
+- Batch indexing support (`updateFilesAsync(...)`) to amortize commit costs for large scans.
+- “Dumb mode” gating is threshold-based (`nanoj.indexing.dumbThresholdMs`) to avoid flicker on tiny updates.
+- Shared read-only indexes via `nanoj.indexing.sharedIndexPaths` ([`SHARED_INDEXES.md`](SHARED_INDEXES.md))
+	- results are unioned across local + shared DBs
+	- shared fileIds are encoded so callers can resolve paths normally
+- Shared-index builder utility: [`SharedIndexBuilder`](core/src/main/java/com/tyron/nanoj/core/indexing/SharedIndexBuilder.java)
 
 Docs: [`INDEXING.md`](INDEXING.md), [`SHARED_INDEXES.md`](SHARED_INDEXES.md)
 
@@ -96,7 +103,14 @@ Start from the closest base class in `:test-framework`:
 - [`BaseIdeTest`](test-framework/src/main/java/com/tyron/nanoj/testFramework/BaseIdeTest.java) → VFS/project-scoped service tests
 - [`BaseEditorTest`](test-framework/src/main/java/com/tyron/nanoj/testFramework/BaseEditorTest.java) → document/editor infrastructure
 - [`BaseCompletionTest`](test-framework/src/main/java/com/tyron/nanoj/testFramework/BaseCompletionTest.java) → completion infrastructure + project lifecycle
+- [`BaseJavaIndexingTest`](test-framework/src/main/java/com/tyron/nanoj/testFramework/BaseJavaIndexingTest.java) → compile `.java` to `.class` bytes and feed binary indexers
 - Java completion tests typically extend `lang-java`’s `BaseJavaCompletionTest` or `BaseJavaTypingCompletionTest`
+
+Useful testing notes (from [`TESTING.md`](TESTING.md)):
+
+- Tests run on a deterministic in-memory VFS (`MockFileSystem`) and emit VFS events explicitly.
+- Completion tests default to “smart mode” by setting the dumb-mode threshold high.
+- Prefer [`IndexManager.flush()`](core/src/main/java/com/tyron/nanoj/core/indexing/IndexManager.java) for deterministic completion of background indexing tasks.
 
 Example (typing simulation):
 
