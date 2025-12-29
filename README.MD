@@ -10,26 +10,26 @@ This repo is a research/active-development codebase; APIs and behavior will chan
 
 Java completion combines **persistent indexes** (fast lookups) with **javac** while keeping expensive compiler infrastructure reusable.
 
-- **Indexes (via `IndexManager`)** power the fast “search space”:
-	- `ShortClassNameIndex` (`java_short_names`) for class name lookup across sources + binaries
-	- `JavaPackageIndex` (`java_packages`) for package/type discovery in `import` and qualified references
-	- `JavaSuperTypeIndex` (`java_supertypes`) for smart `new` suggestions (expected-type → subtypes)
-	- `JavaBinaryStubIndexer` (`java_stubs`) for lightweight library metadata
+- **Indexes (via [`IndexManager`](core/src/main/java/com/tyron/nanoj/core/indexing/IndexManager.java))** power the fast “search space”:
+	- [`ShortClassNameIndex`](lang-java/src/main/java/com/tyron/nanoj/lang/java/indexing/ShortClassNameIndex.java) (`java_short_names`) for class name lookup across sources + binaries
+	- [`JavaPackageIndex`](lang-java/src/main/java/com/tyron/nanoj/lang/java/indexing/JavaPackageIndex.java) (`java_packages`) for package/type discovery in `import` and qualified references
+	- [`JavaSuperTypeIndex`](lang-java/src/main/java/com/tyron/nanoj/lang/java/indexing/JavaSuperTypeIndex.java) (`java_supertypes`) for smart `new` suggestions (expected-type → subtypes)
+	- [`JavaBinaryStubIndexer`](lang-java/src/main/java/com/tyron/nanoj/lang/java/indexing/JavaBinaryStubIndexer.java) (`java_stubs`) for lightweight library metadata
 
-- **Stubs**: `JavaBinaryStubIndexer` builds `ClassStub` records from `.class` files so completion can inspect library members, signatures, and access flags without loading classes.
+- **Stubs**: `JavaBinaryStubIndexer` builds [`ClassStub`](lang-java/src/main/java/com/tyron/nanoj/lang/java/indexing/stub/ClassStub.java) records from `.class` files so completion can inspect library members, signatures, and access flags without loading classes.
 
-- **Cached Javac file manager**: `JavacFileManagerService` is a project service that holds the heavy `JavaFileManager` (wrapped by `IndexedJavaFileManager`) so the boot/classpath scan happens once per project.
+- **Cached Javac file manager**: [`JavacFileManagerService`](lang-java/src/main/java/com/tyron/nanoj/lang/java/compiler/JavacFileManagerService.java) is a project service that holds the heavy `JavaFileManager` (wrapped by [`IndexedJavaFileManager`](lang-java/src/main/java/com/tyron/nanoj/lang/java/compiler/IndexedJavaFileManager.java)) so the boot/classpath scan happens once per project.
 
-- **Per-request compilation snapshot**: when type info is needed, `CompilationInfo` creates a javac task for the current text snapshot and reuses the shared file manager.
+- **Per-request compilation snapshot**: when type info is needed, [`CompilationInfo`](lang-java/src/main/java/com/tyron/nanoj/lang/java/compiler/CompilationInfo.java) creates a javac task for the current text snapshot and reuses the shared file manager.
 
-### Indexing (persistent + incremental-friendly)
+### Indexing
 
 - Persistent MapDB-backed indexes with **schema/version invalidation** and staleness clearing.
-- Shared read-only indexes (`SHARED_INDEXES.md`) support (mount/bundle prebuilt indexes).
+- Shared read-only indexes ([`SHARED_INDEXES.md`](SHARED_INDEXES.md)) support (mount/bundle prebuilt indexes).
 - Index queries support both value iteration and **key-aware prefix** processing (used for package completion).
 - “Dumb mode” gating for features that should wait for indexing.
 
-Docs: `INDEXING.md`, `SHARED_INDEXES.md`
+Docs: [`INDEXING.md`](INDEXING.md), [`SHARED_INDEXES.md`](SHARED_INDEXES.md)
 
 ### Code completion (Java)
 
@@ -41,7 +41,7 @@ Docs: `INDEXING.md`, `SHARED_INDEXES.md`
 	- `new` completions can add imports, add `<>` for generics, add `()`, and place the caret for ctor args
 - Sorting improvements via **lookup weighers** (e.g. exact-prefix matches first).
 
-Java completion tests live under `lang-java/src/test/java/com/tyron/nanoj/lang/java/completion/`.
+Java completion tests live under [`lang-java/src/test/java/com/tyron/nanoj/lang/java/completion/`](lang-java/src/test/java/com/tyron/nanoj/lang/java/completion/).
 
 ### Diagnostics / error highlighting
 
@@ -69,13 +69,13 @@ Note: the `:desktop` module is currently **for testing and prototyping** (UI + i
 
 ## Docs
 
-- `API.md`
-- `VIRTUAL_FILE_MANAGER.md`
-- `EDITOR_API.md`
-- `PROJECT_SERVICES.md`
-- `INDEXING.md`
-- `SHARED_INDEXES.md`
-- `TESTING.md`
+- [`API.md`](API.md)
+- [`VIRTUAL_FILE_MANAGER.md`](VIRTUAL_FILE_MANAGER.md)
+- [`EDITOR_API.md`](EDITOR_API.md)
+- [`PROJECT_SERVICES.md`](PROJECT_SERVICES.md)
+- [`INDEXING.md`](INDEXING.md)
+- [`SHARED_INDEXES.md`](SHARED_INDEXES.md)
+- [`TESTING.md`](TESTING.md)
 
 ## Build & test
 
@@ -93,9 +93,9 @@ Run a single test class:
 
 Start from the closest base class in `:test-framework`:
 
-- `BaseIdeTest` → VFS/project-scoped service tests
-- `BaseEditorTest` → document/editor infrastructure
-- `BaseCompletionTest` → completion infrastructure + project lifecycle
+- [`BaseIdeTest`](test-framework/src/main/java/com/tyron/nanoj/testFramework/BaseIdeTest.java) → VFS/project-scoped service tests
+- [`BaseEditorTest`](test-framework/src/main/java/com/tyron/nanoj/testFramework/BaseEditorTest.java) → document/editor infrastructure
+- [`BaseCompletionTest`](test-framework/src/main/java/com/tyron/nanoj/testFramework/BaseCompletionTest.java) → completion infrastructure + project lifecycle
 - Java completion tests typically extend `lang-java`’s `BaseJavaCompletionTest` or `BaseJavaTypingCompletionTest`
 
 Example (typing simulation):
@@ -116,7 +116,7 @@ class MyTest extends BaseJavaTypingCompletionTest {
 }
 ```
 
-More details (how Mock VFS/projects work, index flushing, dumb mode): `TESTING.md`.
+More details (how Mock VFS/projects work, index flushing, dumb mode): [`TESTING.md`](TESTING.md).
 
 ## Feature & test TODO (completed + planned)
 

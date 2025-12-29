@@ -8,16 +8,16 @@ The `:api` module exists so `:core` and language plugins can depend on stable-is
 
 - **Project model + services**
   - `Project` (configuration, roots/classpath wiring)
-  - `ProjectServiceManager` extension/service model (see `PROJECT_SERVICES.md`)
+  - `ProjectServiceManager` extension/service model (see [`PROJECT_SERVICES.md`](PROJECT_SERVICES.md))
 
 - **Virtual file layer (VFS)**
   - `FileObject` abstraction (works for `file:`, `jar:`, `jrt:`)
   - change events used by indexing and editor infrastructure
-  - more details: `VIRTUAL_FILE_MANAGER.md`
+  - more details: [`VIRTUAL_FILE_MANAGER.md`](VIRTUAL_FILE_MANAGER.md)
 
 - **Editor model**
   - `Document`, `Editor`, caret model, and persistence hooks
-  - more details: `EDITOR_API.md`
+  - more details: [`EDITOR_API.md`](EDITOR_API.md)
 
 - **Completion API**
   - `LookupElement` (presentation + insert handler)
@@ -37,6 +37,6 @@ The `:api` module exists so `:core` and language plugins can depend on stable-is
 
 ## Where to look next
 
-- `PROJECT_SERVICES.md` (services/extensions)
-- `INDEXING.md` and `SHARED_INDEXES.md` (indexing + shared indexes)
-- `TESTING.md` (how to write deterministic tests using `:test-framework`)
+- [`PROJECT_SERVICES.md`](PROJECT_SERVICES.md) (services/extensions)
+- [`INDEXING.md`](INDEXING.md) and [`SHARED_INDEXES.md`](SHARED_INDEXES.md) (indexing + shared indexes)
+- [`TESTING.md`](TESTING.md) (how to write deterministic tests using `:test-framework`)
