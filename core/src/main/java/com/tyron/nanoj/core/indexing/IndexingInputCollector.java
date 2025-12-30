@@ -1,114 +1,242 @@
 package com.tyron.nanoj.core.indexing;
 
+import com.tyron.nanoj.api.indexing.iterators.IndexingIteratorsProvider;
 import com.tyron.nanoj.api.project.Project;
 import com.tyron.nanoj.api.vfs.FileObject;
-import com.tyron.nanoj.core.vfs.VirtualFileManager;
+import com.tyron.nanoj.api.vfs.VirtualFileManager;
+import com.tyron.nanoj.core.indexing.iterators.IndexableFilesDeduplicateFilter;
 
 import java.io.File;
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
+import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
+import java.util.NoSuchElementException;
 import java.util.concurrent.Future;
 
 /**
- * Collects indexable inputs (project roots, libraries, boot classpath, JRT) and submits them to {@link IndexManager}.
+ * Lazy iterator/collector for indexing inputs.
  * <p>
- * This keeps {@link IndexManager} focused on deciding what to index, while this class decides what files/roots to offer.
+ * This is intentionally an {@link Iterable} to avoid building large intermediate lists.
+ *
+ * <p><b>Policy:</b>
+ * <ul>
+ *   <li>Only Project source roots are contributed.</li>
+ *   <li>The Project build directory is always excluded.</li>
+ * </ul>
  */
-public final class IndexingInputCollector {
+public final class IndexingInputCollector implements Iterable<FileObject> {
 
     private final Project project;
+    private final IndexManager indexManager;
 
-    public IndexingInputCollector(Project project) {
+    public IndexingInputCollector(Project project, IndexManager indexManager) {
         this.project = project;
+        this.indexManager = indexManager;
     }
 
     /**
      * Collects inputs and submits them to the given {@link IndexManager}.
-     * <p>
+     *
      * Uses {@link IndexManager#updateFilesAsync(Iterable)} so {@link IndexManager} can decide staleness per index.
      */
-    public Future<?> submitAll(IndexManager indexManager) {
+    public Future<?> submitAll() {
         if (indexManager == null) {
             return null;
         }
-        List<FileObject> inputs = collectAll(indexManager);
-        if (inputs.isEmpty()) {
-            return null;
-        }
-        return indexManager.updateFilesAsync(inputs);
+        return indexManager.updateFilesAsync(this);
     }
 
-    /**
-     * Best-effort list of inputs to offer for indexing.
-     */
-    public List<FileObject> collectAll(IndexManager indexManager) {
+    @Override
+    public Iterator<FileObject> iterator() {
         if (project == null || !project.isOpen()) {
+            return List.<FileObject>of().iterator();
+        }
+
+        final String buildDirPath = safePath(safeBuildDir(project));
+        final List<String> sourceRootPaths = safeSourceRootPaths(project);
+
+        // Snapshot (best-effort) of known leaf paths (typically small; helps tests).
+        final List<String> knownPaths;
+        if (indexManager != null && !sourceRootPaths.isEmpty()) {
+            List<String> snapshot;
+            try {
+                snapshot = indexManager.getKnownFilePathsSnapshot();
+            } catch (Throwable ignored) {
+                snapshot = List.of();
+            }
+            knownPaths = snapshot != null ? snapshot : List.of();
+        } else {
+            knownPaths = List.of();
+        }
+
+        final IndexableFilesDeduplicateFilter dedup = new IndexableFilesDeduplicateFilter();
+        final List<com.tyron.nanoj.api.indexing.iterators.IndexableFilesIterator> iterators = safeIterators(project);
+        final List<FileObject> fallbackRoots;
+        if (iterators.isEmpty()) {
+            List<FileObject> roots;
+            try {
+                roots = project.getSourceRoots();
+            } catch (Throwable ignored) {
+                roots = List.of();
+            }
+            fallbackRoots = roots != null ? roots : List.of();
+        } else {
+            fallbackRoots = List.of();
+        }
+
+        return new Iterator<>() {
+            int knownIndex = 0;
+            int fallbackIndex = 0;
+            int iteratorIndex = 0;
+
+            // state for iterators-based traversal
+            final ArrayList<FileObject> bufferedRoots = new ArrayList<>();
+            int bufferedIndex = 0;
+
+            FileObject next;
+
+            @Override
+            public boolean hasNext() {
+                if (next != null) {
+                    return true;
+                }
+                next = computeNext();
+                return next != null;
+            }
+
+            @Override
+            public FileObject next() {
+                if (!hasNext()) {
+                    throw new NoSuchElementException();
+                }
+                FileObject out = next;
+                next = null;
+                return out;
+            }
+
+            private FileObject computeNext() {
+                // 1) known leaf files
+                while (knownIndex < knownPaths.size()) {
+                    String p = knownPaths.get(knownIndex++);
+                    FileObject fo = resolvePathToFileObject(p);
+                    if (fo == null || fo.isFolder()) continue;
+
+                    String foPath = safePath(fo);
+                    if (!isUnderAnyRoot(foPath, sourceRootPaths)) continue;
+                    if (isInOrUnder(foPath, buildDirPath)) continue;
+                    if (!dedup.shouldAccept(fo)) continue;
+                    return fo;
+                }
+
+                // 2) iterator-provided roots (buffered per iterator)
+                while (true) {
+                    while (bufferedIndex < bufferedRoots.size()) {
+                        FileObject root = bufferedRoots.get(bufferedIndex++);
+                        if (root == null) continue;
+                        if (isInOrUnder(safePath(root), buildDirPath)) continue;
+                        if (!dedup.shouldAccept(root)) continue;
+                        return root;
+                    }
+
+                    bufferedRoots.clear();
+                    bufferedIndex = 0;
+
+                    if (!iterators.isEmpty()) {
+                        if (iteratorIndex >= iterators.size()) {
+                            break;
+                        }
+                        var it = iterators.get(iteratorIndex++);
+                        if (it == null) {
+                            continue;
+                        }
+                        try {
+                            it.iterateRoots(root -> {
+                                if (root != null) {
+                                    bufferedRoots.add(root);
+                                }
+                            });
+                        } catch (Throwable ignored) {
+                        }
+                        continue;
+                    }
+                    break;
+                }
+
+                // 3) fallback source roots
+                while (fallbackIndex < fallbackRoots.size()) {
+                    FileObject root = fallbackRoots.get(fallbackIndex++);
+                    if (root == null) continue;
+                    if (isInOrUnder(safePath(root), buildDirPath)) continue;
+                    if (!dedup.shouldAccept(root)) continue;
+                    return root;
+                }
+
+                return null;
+            }
+        };
+    }
+
+    private static List<com.tyron.nanoj.api.indexing.iterators.IndexableFilesIterator> safeIterators(Project project) {
+        if (project == null) return List.of();
+        try {
+            IndexingIteratorsProvider provider = project.getService(IndexingIteratorsProvider.class);
+            if (provider == null) return List.of();
+            List<com.tyron.nanoj.api.indexing.iterators.IndexableFilesIterator> it = provider.getIterators();
+            return it != null ? it : List.of();
+        } catch (Throwable ignored) {
             return List.of();
         }
+    }
 
-        Set<FileObject> out = new LinkedHashSet<>();
+    private static FileObject safeBuildDir(Project project) {
+        if (project == null) return null;
+        try {
+            return project.getBuildDirectory();
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
 
-        // Prefer already-known leaf files (works in tests where folder traversal isn't available).
-        if (indexManager != null) {
-            try {
-                for (String p : indexManager.getKnownFilePathsSnapshot()) {
-                    FileObject fo = resolvePathToFileObject(p);
-                    if (fo != null && !fo.isFolder()) {
-                        out.add(fo);
-                    }
-                }
-            } catch (Throwable ignored) {
+    private static List<String> safeSourceRootPaths(Project project) {
+        if (project == null) return List.of();
+        try {
+            List<FileObject> roots = project.getSourceRoots();
+            if (roots == null || roots.isEmpty()) return List.of();
+            ArrayList<String> out = new ArrayList<>(roots.size());
+            for (FileObject r : roots) {
+                String p = safePath(r);
+                if (p != null) out.add(p);
             }
-        }
-
-        try {
-            FileObject root = project.getRootDirectory();
-            if (root != null) {
-                out.add(root);
-            }
+            return out;
         } catch (Throwable ignored) {
+            return List.of();
         }
+    }
 
+    private static String safePath(FileObject file) {
+        if (file == null) return null;
         try {
-            out.addAll(project.getSourceRoots());
+            return file.getPath();
         } catch (Throwable ignored) {
+            return null;
         }
+    }
 
-        try {
-            out.addAll(project.getResourceRoots());
-        } catch (Throwable ignored) {
+    private static boolean isUnderAnyRoot(String path, List<String> rootPaths) {
+        if (path == null || rootPaths == null || rootPaths.isEmpty()) return false;
+        for (String rp : rootPaths) {
+            if (isInOrUnder(path, rp)) return true;
         }
+        return false;
+    }
 
-        try {
-            out.addAll(project.getClassPath());
-        } catch (Throwable ignored) {
-        }
-
-        try {
-            out.addAll(project.getBootClassPath());
-        } catch (Throwable ignored) {
-        }
-
-        // Optional: JRT modules root (desktop JDKs). IndexManager understands jrt:/ folder traversal.
-        try {
-            FileObject modulesRoot = VirtualFileManager.getInstance().find(URI.create("jrt:/modules"));
-            if (modulesRoot != null && modulesRoot.exists() && modulesRoot.isFolder()) {
-                out.add(modulesRoot);
-            }
-        } catch (Throwable ignored) {
-        }
-
-        // Remove nulls while preserving order.
-        ArrayList<FileObject> result = new ArrayList<>(out.size());
-        for (FileObject fo : out) {
-            if (fo != null) {
-                result.add(fo);
-            }
-        }
-        return result;
+    private static boolean isInOrUnder(String path, String dirPath) {
+        if (path == null || dirPath == null || dirPath.isBlank()) return false;
+        if (path.equals(dirPath)) return true;
+        if (!path.startsWith(dirPath)) return false;
+        int n = dirPath.length();
+        return path.length() > n && path.charAt(n) == '/';
     }
 
     private static FileObject resolvePathToFileObject(String path) {

@@ -74,7 +74,14 @@ public class DefaultServiceContainer implements ServiceContainer {
 
     @Override
     public <T> void registerInstance(Class<T> serviceClass, T instance) {
-        services.put(serviceClass, instance);
+        Object previous = services.put(serviceClass, instance);
+
+        // If a test replaces an already-instantiated service, dispose the old instance to avoid leaks
+        // (e.g., VirtualFileManagerImpl holding an mmap/lock).
+        // Important: do NOT dispose if the caller re-registers the same instance.
+        if (previous != null && previous != instance) {
+            disposeIfDisposable(previous);
+        }
     }
 
     @Override

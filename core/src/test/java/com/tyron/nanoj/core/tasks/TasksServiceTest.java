@@ -10,7 +10,7 @@ import com.tyron.nanoj.api.tasks.TasksService;
 import com.tyron.nanoj.api.vfs.FileObject;
 import com.tyron.nanoj.core.service.ProjectServiceManager;
 import com.tyron.nanoj.core.test.MockProject;
-import com.tyron.nanoj.core.vfs.VirtualFileManager;
+import com.tyron.nanoj.api.vfs.VirtualFileManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;

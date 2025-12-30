@@ -1,6 +1,12 @@
 package com.tyron.nanoj.lang.java.completions;
 
+import com.sun.source.tree.ErroneousTree;
+import com.sun.source.tree.ExpressionTree;
+import com.sun.source.tree.MemberSelectTree;
+import com.sun.source.tree.Tree;
 import com.sun.source.util.TreePath;
+import com.sun.source.util.Trees;
+import com.sun.tools.javac.tree.JCTree;
 import com.tyron.nanoj.api.completion.CompletionResultSet;
 import com.tyron.nanoj.api.completion.LookupElementBuilder;
 import com.tyron.nanoj.api.project.Project;
@@ -9,6 +15,9 @@ import com.tyron.nanoj.core.indexing.Scopes;
 import com.tyron.nanoj.lang.java.compiler.CompilationInfo;
 import com.tyron.nanoj.lang.java.indexing.JavaPackageIndex;
 
+import javax.lang.model.type.TypeKind;
+import javax.lang.model.type.TypeMirror;
+import javax.lang.model.util.Types;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
@@ -31,6 +40,25 @@ public final class PackageCompletions {
         if (project == null || info == null || pathAtCursor == null || fullText == null || result == null) {
             return;
         }
+
+        if (pathAtCursor.getLeaf().getKind() != Tree.Kind.IMPORT) {
+            Tree parentTree = pathAtCursor.getParentPath().getLeaf();
+            if (!(parentTree instanceof ErroneousTree erroneousTree)) {
+                return;
+            }
+
+            var errorTree = erroneousTree.getErrorTrees().get(0);
+            if (!(errorTree instanceof MemberSelectTree memberSelectTree)) {
+                return;
+            }
+
+            JCTree.JCExpression expression = (JCTree.JCExpression) memberSelectTree.getExpression();
+            TypeKind expressionTypeKind = expression.type.getKind();
+            if (expressionTypeKind != TypeKind.PACKAGE) {
+                return;
+            }
+        }
+
 
         // Build the qualified chain: e.g. "java.util.co" or "java.util.".
         int chainStart = findQualifiedChainStart(fullText, offset);
@@ -55,7 +83,8 @@ public final class PackageCompletions {
         }
 
         String basePkg = trimTrailingDot(base);
-        String searchPrefix = basePkg.isEmpty() ? prefix : (basePkg + "." + prefix);
+        String basePrefix = basePkg.isEmpty() ? prefix : (basePkg + "." + prefix);
+        String searchPrefix = basePrefix;
 
         IndexManager indexManager = IndexManager.getInstance(project);
 
@@ -66,7 +95,7 @@ public final class PackageCompletions {
         String finalPrefix1 = prefix;
         indexManager.processPrefixWithKeys(
                 JavaPackageIndex.ID,
-                basePkg.isEmpty() ? prefix : (basePkg + "." + prefix),
+                basePrefix,
                 Scopes.all(project),
                 (key, fileId, entry) -> {
                     if (key == null) return true;
@@ -86,7 +115,7 @@ public final class PackageCompletions {
                         return true;
                     }
                     if (key.length() == basePkg.length()) {
-                        // Exact package; handled below for types.
+                        // exact package; handled below for types.
                         return true;
                     }
                     if (key.charAt(basePkg.length()) != '.') {

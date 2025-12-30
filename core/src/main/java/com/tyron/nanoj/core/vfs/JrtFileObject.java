@@ -1,6 +1,7 @@
 package com.tyron.nanoj.core.vfs;
 
 import com.tyron.nanoj.api.vfs.FileObject;
+import com.tyron.nanoj.api.vfs.FileObjectWithId;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -62,7 +63,17 @@ final class JrtFileObject implements FileObject {
 
     @Override
     public URI toUri() {
-        return path.toUri();
+        // Avoid relying on Path#toUri() here; for some Path instances this can produce a relative
+        // jrt URI (e.g. "jrt:modules/..."), which breaks callers that expect "jrt:/...".
+        String p = path.toString();
+        if (p == null || p.isBlank()) {
+            p = "/";
+        }
+        p = p.replace('\\', '/');
+        if (!p.startsWith("/")) {
+            p = "/" + p;
+        }
+        return URI.create("jrt:" + p);
     }
 
     @Override

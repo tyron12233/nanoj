@@ -27,14 +27,14 @@ public class JavaKeywordInsertHandlerTest extends BaseJavaTypingCompletionTest {
                     """
                 package p;
                 public class Foo {
-                  public 
+                  public\s
                 }
                 """,
                     s.document.getText(),
                     "document text"
             );
 
-            int expectedCaret = s.document.getText().indexOf("public ") + "public ".length();
+            int expectedCaret = s.document.getText().lastIndexOf("public ") + "public ".length();
             assertEquals(expectedCaret, s.editor.getCaretModel().getOffset(), "caret offset");
         }
     }

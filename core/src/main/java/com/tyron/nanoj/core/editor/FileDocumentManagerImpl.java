@@ -7,7 +7,7 @@ import com.tyron.nanoj.api.project.Project;
 import com.tyron.nanoj.api.vfs.FileObject;
 import com.tyron.nanoj.core.editor.document.InMemoryDocument;
 import com.tyron.nanoj.core.service.ProjectServiceManager;
-import com.tyron.nanoj.core.vfs.VirtualFileManager;
+import com.tyron.nanoj.api.vfs.VirtualFileManager;
 
 import java.io.IOException;
 import java.io.OutputStream;

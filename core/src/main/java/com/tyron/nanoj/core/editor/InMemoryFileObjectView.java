@@ -2,6 +2,7 @@ package com.tyron.nanoj.core.editor;
 
 import com.tyron.nanoj.api.editor.Document;
 import com.tyron.nanoj.api.vfs.FileObject;
+import com.tyron.nanoj.api.vfs.FileObjectWithId;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;

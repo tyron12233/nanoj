@@ -1,36 +1,27 @@
 package com.tyron.nanoj.core.indexing;
 
-import com.tyron.nanoj.api.dumb.DumbService;
 import com.tyron.nanoj.api.indexing.IndexingProgressListener;
 import com.tyron.nanoj.api.indexing.IndexingProgressSnapshot;
 import com.tyron.nanoj.api.project.Project;
 import com.tyron.nanoj.api.service.Disposable;
-import com.tyron.nanoj.api.vfs.FileChangeListener;
-import com.tyron.nanoj.api.vfs.FileEvent;
-import com.tyron.nanoj.api.vfs.FileObject;
+import com.tyron.nanoj.api.vfs.*;
 import com.tyron.nanoj.core.dumb.DumbCore;
 import com.tyron.nanoj.core.indexing.spi.IndexDefinition;
 import com.tyron.nanoj.core.service.ProjectServiceManager;
-import com.tyron.nanoj.core.vfs.VirtualFileManager;
-import org.mapdb.Atomic;
 import org.mapdb.DB;
 import org.mapdb.DBMaker;
 import org.mapdb.Serializer;
 
 import java.io.File;
-import java.net.URI;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -47,7 +38,7 @@ import java.util.logging.Logger;
  * <ul>
  *     <li>ACID Transactions (atomic commit of all indices)</li>
  *     <li>Off-Heap Storage (avoids OOM on Android)</li>
- *     <li>File ID Registry integrated</li>
+ *     <li>Uses {@link FileObject#getId()} from the VFS for File IDs</li>
  * </ul>
  */
 public class IndexManager implements Disposable {
@@ -91,13 +82,6 @@ public class IndexManager implements Disposable {
      */
     public static final String SKIP_UNCHANGED_FILES_KEY = "nanoj.indexing.skipUnchangedFiles";
 
-    /**
-        * Deprecated: definition backfill input collection lives in {@link IndexingInputCollector}.
-        * This key is intentionally unused by {@link IndexManager}.
-        */
-        @Deprecated
-        public static final String SCHEMA_BACKFILL_BATCH_SIZE_KEY = "nanoj.indexing.schemaBackfillBatchSize";
-
     public static IndexManager getInstance(Project project) {
         return ProjectServiceManager.getService(project, IndexManager.class);
     }
@@ -105,9 +89,6 @@ public class IndexManager implements Disposable {
     private final DB db;
     private final List<SharedIndexStore> sharedStores = new CopyOnWriteArrayList<>();
     private final ExecutorService writeExecutor;
-    private final ExecutorService scanExecutor;
-    private final ExecutorService precomputeExecutor;
-    private final ScheduledExecutorService dumbScheduler;
 
     private final int traversalBatchSize;
     private final int precomputeParallelism;
@@ -122,7 +103,6 @@ public class IndexManager implements Disposable {
     private final AtomicInteger queuedFiles = new AtomicInteger(0);
     private final AtomicInteger runningFiles = new AtomicInteger(0);
     private final AtomicLong completedFileRuns = new AtomicLong(0L);
-    private final AtomicLong enqueueOrderSeq = new AtomicLong(0L);
     private final AtomicReference<String> currentFilePath = new AtomicReference<>(null);
 
     private final FileChangeListener vfsListener;
@@ -130,20 +110,16 @@ public class IndexManager implements Disposable {
 
     private final AtomicBoolean disposed = new AtomicBoolean(false);
 
+
     private final Project project;
 
     private final long dumbThresholdMs;
-
-    // File ID Registry
-    private final Map<String, Integer> pathToId;
-    private final Map<Integer, String> idToPath;
-    private final Atomic.Integer nextFileId;
 
     // index Registries
     private final Map<String, IndexDefinition<?, ?>> definitions = new ConcurrentHashMap<>();
     private final Map<String, MapDBIndexWrapper> wrappers = new ConcurrentHashMap<>();
 
-    // rhread-safe access: readers (completion) acquire read lock; writers (indexing) acquire write lock
+    // thread-safe access: readers (completion) acquire read lock; writers (indexing) acquire write lock
     private final ReadWriteLock indexLock = new ReentrantReadWriteLock();
 
     private static final class SharedIndexStore {
@@ -165,19 +141,24 @@ public class IndexManager implements Disposable {
         final CompletableFuture<Void> future;
         final AtomicLong version = new AtomicLong(0L);
         final AtomicLong order = new AtomicLong(0L);
+        final AtomicBoolean fromVfsEvent = new AtomicBoolean(false);
 
-        PendingIndexRequest(String path, FileObject initialFile, long order) {
+        PendingIndexRequest(String path, FileObject initialFile, long order, boolean fromVfsEvent) {
             this.path = path;
             this.fileRef = new AtomicReference<>(initialFile);
             this.future = new CompletableFuture<>();
             this.order.set(order);
             this.version.set(1L);
+            this.fromVfsEvent.set(fromVfsEvent);
         }
 
-        void update(FileObject file, long order) {
+        void update(FileObject file, long order, boolean fromVfsEvent) {
             this.fileRef.set(file);
             this.order.set(order);
             this.version.incrementAndGet();
+            if (fromVfsEvent) {
+                this.fromVfsEvent.set(true);
+            }
         }
     }
 
@@ -207,10 +188,6 @@ public class IndexManager implements Disposable {
                 .closeOnJvmShutdown()
                 .make();
 
-        this.pathToId = db.hashMap("sys_path_to_id", Serializer.STRING, Serializer.INTEGER).createOrOpen();
-        this.idToPath = db.hashMap("sys_id_to_path", Serializer.INTEGER, Serializer.STRING).createOrOpen();
-        this.nextFileId = db.atomicInteger("sys_seq_file_id", 1).createOrOpen();
-
         this.stampStore = new IndexingStampStore(db);
         this.definitionVersionStore = new IndexDefinitionVersionStore(db);
 
@@ -218,45 +195,132 @@ public class IndexManager implements Disposable {
 
         this.writeExecutor = Executors.newSingleThreadExecutor(r -> new Thread(r, "Index-Writer"));
 
-        this.scanExecutor = Executors.newSingleThreadExecutor(r -> {
-            Thread t = new Thread(r, "Index-Scan");
-            t.setDaemon(true);
-            return t;
-        });
-
-        this.precomputeExecutor = (precomputeParallelism <= 1) ? null : Executors.newFixedThreadPool(precomputeParallelism, r -> {
-            Thread t = new Thread(r, "Index-Precompute");
-            t.setDaemon(true);
-            return t;
-        });
-
-        this.dumbScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread t = new Thread(r, "DumbMode-Indexing-Timer");
-            t.setDaemon(true);
-            return t;
-        });
 
         this.vfsListener = new FileChangeListener() {
             @Override
             public void fileCreated(FileEvent event) {
-                updateFile(event.getFile());
+                FileObject file = event != null ? event.getFile() : null;
+                if (shouldIndexFromVfsEvent(file)) {
+                    updateFileFromVfsEvent(file);
+                }
             }
 
             @Override
             public void fileDeleted(FileEvent event) {
-
+                // VFS knows about deletes (including those detected by refresh diff). Remove index data.
+                FileObject file = event != null ? event.getFile() : null;
+                if (shouldIndexFromVfsEvent(file)) {
+                    removeFileAsync(file);
+                }
             }
 
             @Override
             public void fileChanged(FileEvent event) {
-                updateFile(event.getFile());
+                FileObject file = event != null ? event.getFile() : null;
+                if (shouldIndexFromVfsEvent(file)) {
+                    updateFileFromVfsEvent(file);
+                }
             }
 
             @Override
             public void fileRenamed(FileEvent event) {
+                FileObject newFile = event.getFile();
+                FileObject oldFile = (event instanceof FileRenameEvent re) ? re.getOldFile() : null;
 
+                boolean newAllowed = shouldIndexFromVfsEvent(newFile);
+                boolean oldAllowed = shouldIndexFromVfsEvent(oldFile);
+
+                int newId = safeVfsId(newFile);
+                int oldId = safeVfsId(oldFile);
+
+                // If the VFS provides stable ids across rename, updating the new file is sufficient.
+                // If ids differ (best-effort), also remove stale data for the old id.
+                if (oldAllowed) {
+                    if (!newAllowed) {
+                        removeFileAsync(oldFile);
+                    } else if (oldId > 0 && newId > 0 && oldId != newId) {
+                        removeFileAsync(oldFile);
+                    }
+                }
+
+                if (newAllowed) {
+                    updateFileFromVfsEvent(newFile);
+                }
             }
         };
+    }
+
+    private void updateFileFromVfsEvent(FileObject file) {
+
+    }
+
+    private boolean shouldIndexFromVfsEvent(FileObject file) {
+        if (file == null || disposed.get() || !project.isOpen()) {
+            return false;
+        }
+
+        // Avoid expensive container/recursive indexing from VFS events.
+        try {
+            if (file.isFolder()) {
+                return false;
+            }
+        } catch (Throwable ignored) {
+            return false;
+        }
+
+        String path = safePath(file);
+        if (path == null || path.isBlank()) {
+            return false;
+        }
+
+        String buildDirPath = safePath(safeBuildDir());
+        if (isInOrUnder(path, buildDirPath)) {
+            return false;
+        }
+
+        List<FileObject> roots;
+        try {
+            roots = project.getSourceRoots();
+        } catch (Throwable ignored) {
+            roots = List.of();
+        }
+        if (roots == null || roots.isEmpty()) {
+            return false;
+        }
+
+        for (FileObject r : roots) {
+            String rp = safePath(r);
+            if (isInOrUnder(path, rp)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private FileObject safeBuildDir() {
+        try {
+            return project.getBuildDirectory();
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private static String safePath(FileObject file) {
+        if (file == null) return null;
+        try {
+            return file.getPath();
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private static boolean isInOrUnder(String path, String dirPath) {
+        if (path == null || dirPath == null || dirPath.isBlank()) return false;
+        if (path.equals(dirPath)) return true;
+        if (!path.startsWith(dirPath)) return false;
+        int n = dirPath.length();
+        return path.length() > n && path.charAt(n) == '/';
     }
 
     /**
@@ -443,17 +507,6 @@ public class IndexManager implements Disposable {
         return globalFileId & 0x00FF_FFFF;
     }
 
-    public int getOrCreateId(FileObject file) {
-        String path = file.getPath();
-        Integer id = pathToId.get(path);
-        if (id != null) return id;
-
-        int newId = nextFileId.incrementAndGet();
-        pathToId.put(path, newId);
-        idToPath.put(newId, path);
-        return newId;
-    }
-
     public String getFilePath(int id) {
         if (isSharedFileId(id)) {
             int storeOrdinal = decodeSharedStoreOrdinal(id);
@@ -466,7 +519,12 @@ public class IndexManager implements Disposable {
             }
             return null;
         }
-        return idToPath.get(id);
+        try {
+            FileObject fo = VirtualFileManager.getInstance().findById(id);
+            return fo != null ? fo.getPath() : null;
+        } catch (Throwable ignored) {
+            return null;
+        }
     }
 
     /**
@@ -476,28 +534,14 @@ public class IndexManager implements Disposable {
      */
     List<String> getKnownFilePathsSnapshot() {
         try {
-            return new ArrayList<>(idToPath.values());
+            return stampStore.getAllStampedPathsSnapshot();
         } catch (Throwable ignored) {
             return List.of();
         }
     }
 
     public void updateFile(FileObject file) {
-        if (disposed.get() || !project.isOpen()) {
-            return;
-        }
 
-        // avoid doing any MapDB work for file types that no index definition supports.
-        // this is important for classpath indexing attempts that may touch many .jar files.
-        if (!shouldIndex(file)) {
-            return;
-        }
-
-        if (skipUnchangedFiles && !isOutdatedForAnyIndex(file)) {
-            return;
-        }
-
-        updateFileAsync(file);
     }
 
     public void addProgressListener(IndexingProgressListener listener) {
@@ -517,6 +561,67 @@ public class IndexManager implements Disposable {
         }
     }
 
+    /**
+     * Clears the local index DB content (all index maps + stamps) and resets in-memory queues.
+     * <p>
+     * This does not affect mounted shared indexes.
+     */
+    public Future<?> invalidateLocalCachesAsync() {
+        if (disposed.get() || !project.isOpen()) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        CompletableFuture<Void> future = new CompletableFuture<>();
+
+        try {
+            writeExecutor.submit(() -> {
+                if (disposed.get() || !project.isOpen()) {
+                    future.complete(null);
+                    return;
+                }
+
+                // Drop queued work (best-effort) and clear progress.
+                pendingByPath.clear();
+                queuedFiles.set(0);
+                runningFiles.set(0);
+                completedFileRuns.set(0L);
+                currentFilePath.set(null);
+                fireProgressChanged();
+
+                indexLock.writeLock().lock();
+                try {
+                    for (MapDBIndexWrapper w : wrappers.values()) {
+                        try {
+                            if (w != null) w.clear();
+                        } catch (Throwable ignored) {
+                        }
+                    }
+                    try {
+                        stampStore.clear();
+                    } catch (Throwable ignored) {
+                    }
+                    try {
+                        definitionVersionStore.clear();
+                    } catch (Throwable ignored) {
+                    }
+                    try {
+                        db.commit();
+                    } catch (Throwable ignored) {
+                    }
+                } finally {
+                    indexLock.writeLock().unlock();
+                }
+
+                future.complete(null);
+                fireProgressChanged();
+            });
+        } catch (RejectedExecutionException e) {
+            future.complete(null);
+        }
+
+        return future;
+    }
+
     public IndexingProgressSnapshot getProgressSnapshot() {
         return new IndexingProgressSnapshot(
                 queuedFiles.get(),
@@ -524,28 +629,6 @@ public class IndexManager implements Disposable {
                 completedFileRuns.get(),
                 currentFilePath.get()
         );
-    }
-
-    /**
-     * Returns a best-effort snapshot of queued file paths (excludes the currently-indexed file).
-     */
-    public List<String> getQueuedFilePaths(int limit) {
-        String current = currentFilePath.get();
-
-        List<PendingIndexRequest> pending = new ArrayList<>(pendingByPath.values());
-        pending.sort(Comparator.comparingLong(r -> r.order.get()));
-
-        List<String> result = new ArrayList<>();
-        for (PendingIndexRequest r : pending) {
-            if (result.size() >= limit) {
-                break;
-            }
-            if (current != null && current.equals(r.path)) {
-                continue;
-            }
-            result.add(r.path);
-        }
-        return result;
     }
 
     private boolean shouldIndex(FileObject file) {
@@ -600,492 +683,10 @@ public class IndexManager implements Disposable {
         } catch (Throwable ignored) {
         }
     }
-
-    /**
-     * Enqueues an index update on the background writer.
-     * <p>
-     * This never blocks the caller thread.
-     *
-     * @return a Future that can be waited on (tests / callers that need determinism).
-     */
-    public Future<?> updateFileAsync(FileObject file) {
-        if (disposed.get() || !project.isOpen()) {
-            return CompletableFuture.completedFuture(null);
-        }
-
-        if (file == null) {
-            return CompletableFuture.completedFuture(null);
-        }
-
-        if (!file.isFolder() && skipUnchangedFiles && !isOutdatedForAnyIndex(file)) {
-            return CompletableFuture.completedFuture(null);
-        }
-
-        Future<?> traversal = maybeIndexRecursively(file);
-        if (traversal != null) {
-            return traversal;
-        }
-
-        if (!shouldIndex(file)) {
-            return CompletableFuture.completedFuture(null);
-        }
-
-        String path = file.getPath();
-        long order = enqueueOrderSeq.incrementAndGet();
-
-        PendingIndexRequest existing = pendingByPath.get(path);
-        if (existing != null) {
-            existing.update(file, order);
-            fireProgressChanged();
-            return existing.future;
-        }
-
-        PendingIndexRequest created = new PendingIndexRequest(path, file, order);
-        PendingIndexRequest prev = pendingByPath.putIfAbsent(path, created);
-        if (prev != null) {
-            prev.update(file, order);
-            fireProgressChanged();
-            return prev.future;
-        }
-
-        queuedFiles.incrementAndGet();
-        fireProgressChanged();
-        submitIndexTask(created);
-        return created.future;
-    }
-
-    /**
-     * Batch variant of {@link #updateFileAsync(FileObject)}.
-     * <p>
-     * This is intended for classpath scans (e.g. thousands of .class files from {@code jrt:} / {@code jar:})
-     * where per-file task scheduling and per-file MapDB commits become the bottleneck.
-     * <p>
-     * Each file is still indexed with its own FileID (so multivalued keys like ShortClassNameIndex remain correct),
-     * but work is performed in a single writer task and a single MapDB commit.
-     */
     public Future<?> updateFilesAsync(Iterable<FileObject> files) {
-        if (disposed.get() || !project.isOpen()) {
-            return CompletableFuture.completedFuture(null);
-        }
 
-        if (files == null) {
-            return CompletableFuture.completedFuture(null);
-        }
-
-        ArrayList<FileObject> indexables = new ArrayList<>();
-        ArrayList<Future<?>> traversalFutures = new ArrayList<>();
-        for (FileObject f : files) {
-            if (f == null) continue;
-
-            Future<?> traversal = maybeIndexRecursively(f);
-            if (traversal != null) {
-                traversalFutures.add(traversal);
-                continue;
-            }
-
-            if (!shouldIndex(f)) continue;
-            if (skipUnchangedFiles && !isOutdatedForAnyIndex(f)) continue;
-            indexables.add(f);
-        }
-
-        CompletableFuture<Void> leafFuture = indexables.isEmpty()
-                ? CompletableFuture.completedFuture(null)
-                : asCompletableVoid(updateFilesAsyncLeaf(indexables));
-
-        CompletableFuture<Void> traversalFuture;
-        if (traversalFutures.isEmpty()) {
-            traversalFuture = CompletableFuture.completedFuture(null);
-        } else {
-            CompletableFuture<?>[] arr = new CompletableFuture<?>[traversalFutures.size()];
-            for (int i = 0; i < traversalFutures.size(); i++) {
-                arr[i] = asCompletableVoid(traversalFutures.get(i));
-            }
-            traversalFuture = CompletableFuture.allOf(arr);
-        }
-
-        return CompletableFuture.allOf(leafFuture, traversalFuture);
     }
 
-    private Future<?> updateFilesAsyncForDefinition(IndexDefinition<?, ?> def, List<FileObject> files) {
-        if (disposed.get() || !project.isOpen()) {
-            return CompletableFuture.completedFuture(null);
-        }
-        if (def == null || files == null || files.isEmpty()) {
-            return CompletableFuture.completedFuture(null);
-        }
-
-        // Filter down to supported files only (do NOT apply skip-unchanged; this is for backfill).
-        ArrayList<FileObject> indexables = new ArrayList<>(files.size());
-        for (FileObject f : files) {
-            if (f == null || f.isFolder()) continue;
-            if (!JrtExportFilter.isIndexable(f, skipNonExportedJrt)) continue;
-            try {
-                if (!def.supports(f)) continue;
-            } catch (Throwable ignored) {
-                continue;
-            }
-            indexables.add(f);
-        }
-        if (indexables.isEmpty()) {
-            return CompletableFuture.completedFuture(null);
-        }
-
-        final CompletableFuture<Void> future = new CompletableFuture<>();
-        queuedFiles.addAndGet(indexables.size());
-        fireProgressChanged();
-
-        try {
-            writeExecutor.submit(() -> runBatchIndexTaskForDefinition(def, indexables, future));
-        } catch (RejectedExecutionException e) {
-            queuedFiles.updateAndGet(v -> Math.max(0, v - indexables.size()));
-            fireProgressChanged();
-            future.complete(null);
-        }
-
-        return future;
-    }
-
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    private void runBatchIndexTaskForDefinition(IndexDefinition def, List<FileObject> files, CompletableFuture<Void> future) {
-        if (disposed.get() || !project.isOpen()) {
-            future.complete(null);
-            fireProgressChanged();
-            return;
-        }
-
-        queuedFiles.updateAndGet(v -> Math.max(0, v - files.size()));
-        runningFiles.addAndGet(files.size());
-        fireProgressChanged();
-
-        int processed = 0;
-        try {
-            indexLock.writeLock().lock();
-            try {
-                for (FileObject file : files) {
-                    if (disposed.get() || !project.isOpen()) {
-                        break;
-                    }
-                    if (file == null) {
-                        continue;
-                    }
-
-                    String path = file.getPath();
-                    currentFilePath.set(path);
-
-                    int fileId = getOrCreateId(file);
-                    Object helper = buildHelper(file);
-
-                    try {
-                        if (def.supports(file)) {
-                            updateIndex(def, file, fileId, helper);
-                            stampStore.update(def.getId(), def.getVersion(), path, file);
-                        }
-                    } catch (Throwable ignored) {
-                    }
-
-                    processed++;
-                    completedFileRuns.incrementAndGet();
-                    runningFiles.updateAndGet(v -> Math.max(0, v - 1));
-                    if ((processed & 0x7F) == 0) {
-                        fireProgressChanged();
-                    }
-                }
-
-                db.commit();
-            } finally {
-                indexLock.writeLock().unlock();
-            }
-        } catch (Throwable ignored) {
-        } finally {
-            int remaining = Math.max(0, files.size() - processed);
-            if (remaining > 0) {
-                runningFiles.updateAndGet(v -> Math.max(0, v - remaining));
-            }
-            currentFilePath.set(null);
-            fireProgressChanged();
-            future.complete(null);
-        }
-    }
-
-    private Future<?> updateFilesAsyncLeaf(List<FileObject> indexables) {
-        if (disposed.get() || !project.isOpen()) {
-            return CompletableFuture.completedFuture(null);
-        }
-
-        if (indexables == null || indexables.isEmpty()) {
-            return CompletableFuture.completedFuture(null);
-        }
-
-        final CompletableFuture<Void> future = new CompletableFuture<>();
-        queuedFiles.addAndGet(indexables.size());
-        fireProgressChanged();
-
-        try {
-            writeExecutor.submit(() -> runBatchIndexTask(indexables, future));
-        } catch (RejectedExecutionException e) {
-            queuedFiles.updateAndGet(v -> Math.max(0, v - indexables.size()));
-            fireProgressChanged();
-            future.complete(null);
-        }
-
-        return future;
-    }
-
-    private void runBatchIndexTask(List<FileObject> files, CompletableFuture<Void> future) {
-        if (disposed.get() || !project.isOpen()) {
-            future.complete(null);
-            fireProgressChanged();
-            return;
-        }
-
-        // treat each file as a unit of progress, but do the work in one writer task.
-        queuedFiles.updateAndGet(v -> Math.max(0, v - files.size()));
-        runningFiles.addAndGet(files.size());
-        fireProgressChanged();
-
-        DumbService dumbService = ProjectServiceManager.getService(project, DumbService.class);
-        AtomicBoolean finished = new AtomicBoolean(false);
-        AtomicReference<DumbService.DumbModeToken> dumbTokenRef = new AtomicReference<>();
-        ScheduledFuture<?> dumbFuture = null;
-
-        if (dumbThresholdMs <= 0) {
-            dumbTokenRef.set(dumbService.startDumbTask("Indexing: batch(" + files.size() + ")"));
-        } else {
-            dumbFuture = dumbScheduler.schedule(() -> {
-                if (finished.get()) {
-                    return;
-                }
-
-                DumbService.DumbModeToken token = dumbService.startDumbTask("Indexing: batch(" + files.size() + ")");
-
-                if (finished.get()) {
-                    token.close();
-                    return;
-                }
-
-                if (!dumbTokenRef.compareAndSet(null, token)) {
-                    token.close();
-                }
-            }, dumbThresholdMs, TimeUnit.MILLISECONDS);
-        }
-
-        int processed = 0;
-
-        // snapshot definitions once for consistency within this batch.
-        List<IndexDefinition<?, ?>> defsSnapshot = new ArrayList<>(definitions.values());
-
-        // precompute outside the MapDB write lock to avoid blocking readers on parsing/IO.
-        List<PrecomputedFile> precomputed = null;
-        try {
-            precomputed = maybePrecompute(files, defsSnapshot);
-        } catch (Throwable ignored) {
-        }
-
-        try {
-            indexLock.writeLock().lock();
-            try {
-                for (int i = 0; i < files.size(); i++) {
-                    FileObject file = files.get(i);
-                    if (disposed.get() || !project.isOpen()) {
-                        break;
-                    }
-
-                    String path = file.getPath();
-                    currentFilePath.set(path);
-
-                    int fileId = getOrCreateId(file);
-
-                    PrecomputedFile pc = (precomputed != null && i < precomputed.size()) ? precomputed.get(i) : null;
-                    Object helper = (pc != null) ? pc.helper : buildHelper(file);
-
-                    for (IndexDefinition<?, ?> def : defsSnapshot) {
-                        if (!def.supports(file)) {
-                            continue;
-                        }
-
-                        if (skipUnchangedFiles && !def.isOutdated(file, stampStore)) {
-                            continue;
-                        }
-
-                        if (pc != null) {
-                            applyPrecomputed(def, fileId, pc.entriesByIndexId.get(def.getId()));
-                        } else {
-                            updateIndex(def, file, fileId, helper);
-                        }
-
-                        stampStore.update(def.getId(), def.getVersion(), path, file);
-                    }
-
-                    processed++;
-                    completedFileRuns.incrementAndGet();
-                    runningFiles.updateAndGet(v -> Math.max(0, v - 1));
-
-                    // avoid spamming listeners on very large batches.
-                    if ((processed & 0x7F) == 0) {
-                        fireProgressChanged();
-                    }
-                }
-
-                db.commit();
-
-            } finally {
-                indexLock.writeLock().unlock();
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            finished.set(true);
-            if (dumbFuture != null) {
-                dumbFuture.cancel(false);
-            }
-            DumbService.DumbModeToken tok = dumbTokenRef.getAndSet(null);
-            if (tok != null) {
-                tok.close();
-            }
-
-            // if we bailed early, ensure counters are consistent.
-            int remaining = Math.max(0, files.size() - processed);
-            if (remaining > 0) {
-                runningFiles.updateAndGet(v -> Math.max(0, v - remaining));
-                // processed were already counted as completed; remaining were neither completed nor queued.
-            }
-
-            currentFilePath.set(null);
-            fireProgressChanged();
-            future.complete(null);
-        }
-    }
-
-    private void submitIndexTask(PendingIndexRequest req) {
-        try {
-            writeExecutor.submit(() -> runIndexTask(req));
-        } catch (RejectedExecutionException e) {
-            // shutdown/dispose.
-            PendingIndexRequest removed = pendingByPath.remove(req.path);
-            if (removed != null) {
-                queuedFiles.updateAndGet(v -> Math.max(0, v - 1));
-                fireProgressChanged();
-                removed.future.complete(null);
-            }
-        }
-    }
-
-    private void runIndexTask(PendingIndexRequest req) {
-        if (disposed.get() || !project.isOpen()) {
-            pendingByPath.remove(req.path, req);
-            req.future.complete(null);
-            fireProgressChanged();
-            return;
-        }
-
-        String path = req.path;
-
-        queuedFiles.updateAndGet(v -> Math.max(0, v - 1));
-        runningFiles.incrementAndGet();
-        currentFilePath.set(path);
-        fireProgressChanged();
-
-        long versionAtStart = req.version.get();
-        FileObject file = req.fileRef.get();
-
-        if (skipUnchangedFiles && !isOutdatedForAnyIndex(file)) {
-            pendingByPath.remove(path, req);
-            runningFiles.updateAndGet(v -> Math.max(0, v - 1));
-            currentFilePath.compareAndSet(path, null);
-            completedFileRuns.incrementAndGet();
-            fireProgressChanged();
-            req.future.complete(null);
-            return;
-        }
-
-        DumbService dumbService = ProjectServiceManager.getService(project, DumbService.class);
-
-        AtomicBoolean finished = new AtomicBoolean(false);
-        AtomicReference<DumbService.DumbModeToken> dumbTokenRef = new AtomicReference<>();
-        ScheduledFuture<?> dumbFuture = null;
-        if (dumbThresholdMs <= 0) {
-            dumbTokenRef.set(dumbService.startDumbTask("Indexing: " + path));
-        } else {
-            dumbFuture = dumbScheduler.schedule(() -> {
-                if (finished.get()) {
-                    return;
-                }
-
-                DumbService.DumbModeToken token = dumbService.startDumbTask("Indexing: " + path);
-
-                if (finished.get()) {
-                    token.close();
-                    return;
-                }
-
-                if (!dumbTokenRef.compareAndSet(null, token)) {
-                    token.close();
-                }
-            }, dumbThresholdMs, TimeUnit.MILLISECONDS);
-        }
-
-        try {
-            indexLock.writeLock().lock();
-            try {
-                int fileId = getOrCreateId(file);
-
-                Object helper = buildHelper(file);
-
-                for (IndexDefinition<?, ?> def : definitions.values()) {
-                    if (!def.supports(file)) {
-                        continue;
-                    }
-
-                    if (skipUnchangedFiles && !def.isOutdated(file, stampStore)) {
-                        continue;
-                    }
-
-                    updateIndex(def, file, fileId, helper);
-                    stampStore.update(def.getId(), def.getVersion(), path, file);
-                }
-
-                db.commit();
-
-            } finally {
-                indexLock.writeLock().unlock();
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            finished.set(true);
-            if (dumbFuture != null) {
-                dumbFuture.cancel(false);
-            }
-            DumbService.DumbModeToken tok = dumbTokenRef.getAndSet(null);
-            if (tok != null) {
-                tok.close();
-            }
-
-            runningFiles.updateAndGet(v -> Math.max(0, v - 1));
-            currentFilePath.compareAndSet(path, null);
-            completedFileRuns.incrementAndGet();
-            fireProgressChanged();
-        }
-
-        if (disposed.get() || !project.isOpen()) {
-            pendingByPath.remove(path, req);
-            req.future.complete(null);
-            return;
-        }
-
-        long versionAfter = req.version.get();
-        if (versionAfter != versionAtStart) {
-            // File was requested again while we were indexing; re-queue.
-            req.order.set(enqueueOrderSeq.incrementAndGet());
-            queuedFiles.incrementAndGet();
-            fireProgressChanged();
-            submitIndexTask(req);
-            return;
-        }
-
-        pendingByPath.remove(path, req);
-        req.future.complete(null);
-    }
 
     /**
      * Waits until all previously queued index write tasks are completed.
@@ -1126,6 +727,7 @@ public class IndexManager implements Disposable {
     }
 
     private <K, V> void updateIndex(IndexDefinition<K, V> def, FileObject file, int fileId, Object helper) {
+        System.out.println("Updating index: " + file.getName());
         MapDBIndexWrapper wrapper = wrappers.get(def.getId());
 
         Map<K, V> newEntries;
@@ -1188,273 +790,6 @@ public class IndexManager implements Disposable {
         } catch (Throwable ignored) {
         }
         return null;
-    }
-
-    private record PrecomputedEntry(String key, byte[] valueBytes) {
-    }
-
-    private record PrecomputedFile(Object helper, Map<String, List<PrecomputedEntry>> entriesByIndexId) {
-    }
-
-    private List<PrecomputedFile> maybePrecompute(List<FileObject> files, List<IndexDefinition<?, ?>> defsSnapshot) {
-        if (precomputeExecutor == null) {
-            return null;
-        }
-        if (files == null || files.isEmpty()) {
-            return null;
-        }
-        if (defsSnapshot == null || defsSnapshot.isEmpty()) {
-            return null;
-        }
-
-        // avoid overhead for tiny batches.
-        if (files.size() < 256) {
-            return null;
-        }
-
-        ArrayList<CompletableFuture<PrecomputedFile>> futures = new ArrayList<>(files.size());
-        for (FileObject file : files) {
-            futures.add(CompletableFuture.supplyAsync(() -> precomputeOne(file, defsSnapshot), precomputeExecutor));
-        }
-
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-
-        ArrayList<PrecomputedFile> result = new ArrayList<>(files.size());
-        for (CompletableFuture<PrecomputedFile> f : futures) {
-            try {
-                result.add(f.getNow(null));
-            } catch (Throwable ignored) {
-                result.add(null);
-            }
-        }
-        return result;
-    }
-
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    private PrecomputedFile precomputeOne(FileObject file, List<IndexDefinition<?, ?>> defsSnapshot) {
-        if (disposed.get() || !project.isOpen()) {
-            return null;
-        }
-
-        Object helper = buildHelper(file);
-        Map<String, List<PrecomputedEntry>> byIndexId = new HashMap<>();
-
-        for (IndexDefinition def : defsSnapshot) {
-            if (def == null) continue;
-            try {
-                if (!def.supports(file)) {
-                    continue;
-                }
-
-                if (skipUnchangedFiles && !def.isOutdated(file, stampStore)) {
-                    continue;
-                }
-
-                Map<?, ?> mapped;
-                try {
-                    mapped = def.map(file, helper);
-                } catch (Throwable t) {
-                    t.printStackTrace();
-                    mapped = Collections.emptyMap();
-                }
-                if (mapped == null) {
-                    mapped = Collections.emptyMap();
-                }
-
-                if (mapped.isEmpty()) {
-                    byIndexId.put(def.getId(), List.of());
-                    continue;
-                }
-
-                ArrayList<PrecomputedEntry> entries = new ArrayList<>(mapped.size());
-                for (Map.Entry<?, ?> e : ((Map<?, ?>) mapped).entrySet()) {
-                    if (e == null) continue;
-                    Object k = e.getKey();
-                    Object v = e.getValue();
-                    if (k == null || v == null) continue;
-
-                    String keyStr = k.toString();
-                    byte[] valBytes = def.serializeValue(v);
-                    entries.add(new PrecomputedEntry(keyStr, valBytes));
-                }
-                byIndexId.put(def.getId(), entries);
-            } catch (Throwable ignored) {
-                // best-effort
-            }
-        }
-
-        return new PrecomputedFile(helper, byIndexId);
-    }
-
-    private void applyPrecomputed(IndexDefinition<?, ?> def, int fileId, List<PrecomputedEntry> entries) {
-        MapDBIndexWrapper wrapper = wrappers.get(def.getId());
-        if (wrapper == null) {
-            return;
-        }
-
-        Set<String> oldKeys = wrapper.getForwardKeys(fileId);
-        for (String oldKey : oldKeys) {
-            wrapper.removeInvertedByFileId(oldKey, fileId);
-        }
-
-        if (entries == null || entries.isEmpty()) {
-            wrapper.putForward(fileId, Collections.emptySet());
-            return;
-        }
-
-        Set<String> newKeysForForward = new HashSet<>(Math.max(16, entries.size()));
-        for (PrecomputedEntry e : entries) {
-            if (e == null || e.key == null || e.valueBytes == null) continue;
-
-            byte[] valBytes = e.valueBytes;
-            byte[] packet = new byte[4 + valBytes.length];
-            packet[0] = (byte) (fileId >> 24);
-            packet[1] = (byte) (fileId >> 16);
-            packet[2] = (byte) (fileId >> 8);
-            packet[3] = (byte) (fileId);
-            System.arraycopy(valBytes, 0, packet, 4, valBytes.length);
-
-            wrapper.putInverted(e.key, packet);
-            newKeysForForward.add(e.key);
-        }
-
-        wrapper.putForward(fileId, newKeysForForward);
-    }
-
-    private Future<?> maybeIndexRecursively(FileObject file) {
-        try {
-            if (file == null) {
-                return null;
-            }
-
-            // folder roots: traverse children (includes jrt:/ and jar: roots).
-            if (file.isFolder()) {
-                return indexRecursivelyAsync(file);
-            }
-
-            // ocal .jar file: resolve jar root (jar:...!/) and traverse.
-            if (isLocalJarFile(file)) {
-                FileObject jarRoot = resolveJarRoot(file);
-                if (jarRoot != null && jarRoot.isFolder()) {
-                    return indexRecursivelyAsync(jarRoot);
-                }
-            }
-        } catch (Throwable ignored) {
-        }
-        return null;
-    }
-
-    private boolean isLocalJarFile(FileObject file) {
-        if (file == null) return false;
-        if (file.isFolder()) return false;
-        return "jar".equalsIgnoreCase(file.getExtension());
-    }
-
-    private FileObject resolveJarRoot(FileObject jarFile) {
-        try {
-            URI jarRoot = URI.create("jar:" + jarFile.toUri() + "!/");
-            return VirtualFileManager.getInstance().find(jarRoot);
-        } catch (Throwable ignored) {
-            return null;
-        }
-    }
-
-    private Future<?> indexRecursivelyAsync(FileObject root) {
-        if (disposed.get() || !project.isOpen()) {
-            return CompletableFuture.completedFuture(null);
-        }
-
-        CompletableFuture<Void> result = new CompletableFuture<>();
-        try {
-            scanExecutor.submit(() -> {
-                try {
-                    indexRecursively(root).whenComplete((v, t) -> {
-                        if (t != null) {
-                            result.completeExceptionally(t);
-                        } else {
-                            result.complete(null);
-                        }
-                    });
-                } catch (Throwable t) {
-                    result.completeExceptionally(t);
-                }
-            });
-        } catch (RejectedExecutionException e) {
-            result.complete(null);
-        }
-
-        return result;
-    }
-
-    private CompletableFuture<Void> indexRecursively(FileObject root) {
-        if (root == null) {
-            return CompletableFuture.completedFuture(null);
-        }
-
-        Deque<FileObject> stack = new ArrayDeque<>();
-        stack.push(root);
-
-        ArrayList<FileObject> batch = new ArrayList<>(traversalBatchSize);
-        CompletableFuture<Void> chain = CompletableFuture.completedFuture(null);
-
-        while (!stack.isEmpty()) {
-            if (disposed.get() || !project.isOpen()) {
-                break;
-            }
-
-            FileObject cur = stack.pop();
-            if (cur == null) continue;
-
-            if (cur.isFolder()) {
-                List<FileObject> kids;
-                try {
-                    kids = cur.getChildren();
-                } catch (Throwable ignored) {
-                    kids = List.of();
-                }
-                if (kids == null || kids.isEmpty()) continue;
-                for (FileObject k : kids) {
-                    if (k != null) {
-                        stack.push(k);
-                    }
-                }
-                continue;
-            }
-
-            if (!shouldIndex(cur)) {
-                continue;
-            }
-
-            batch.add(cur);
-            if (batch.size() >= traversalBatchSize) {
-                List<FileObject> toSubmit = new ArrayList<>(batch);
-                batch.clear();
-                chain = chain.thenCompose(v -> asCompletableVoid(updateFilesAsyncLeaf(toSubmit)));
-            }
-        }
-
-        if (!batch.isEmpty()) {
-            List<FileObject> toSubmit = new ArrayList<>(batch);
-            batch.clear();
-            chain = chain.thenCompose(v -> asCompletableVoid(updateFilesAsyncLeaf(toSubmit)));
-        }
-
-        return chain;
-    }
-
-    private static CompletableFuture<Void> asCompletableVoid(Future<?> future) {
-        if (future == null) {
-            return CompletableFuture.completedFuture(null);
-        }
-        if (future instanceof CompletableFuture<?> cf) {
-            return cf.thenApply(v -> null);
-        }
-        return CompletableFuture.runAsync(() -> {
-            try {
-                future.get();
-            } catch (Throwable ignored) {
-            }
-        }, ForkJoinPool.commonPool());
     }
 
     /**
@@ -1706,22 +1041,7 @@ public class IndexManager implements Disposable {
             VirtualFileManager.getInstance().removeGlobalListener(vfsListener);
         }
 
-        // Stop scheduling any "enter dumb mode" timers.
-        dumbScheduler.shutdownNow();
-
-        try {
-            scanExecutor.shutdownNow();
-        } catch (Throwable ignored) {
-        }
-
-        try {
-            if (precomputeExecutor != null) {
-                precomputeExecutor.shutdownNow();
-            }
-        } catch (Throwable ignored) {
-        }
-
-        // Drain queued writes before closing MapDB (prevents NPEs from background tasks).
+        // drain queued writes before closing MapDB (prevents NPEs from background tasks).
         boolean isWriterThread = Thread.currentThread().getName().contains("Index-Writer");
         if (!isWriterThread) {
             try {
@@ -1797,5 +1117,81 @@ public class IndexManager implements Disposable {
         // would take (byte[], offset, len) to avoid this copy.
         // For now, Arrays.copyOfRange is safe and clean.
         return Arrays.copyOfRange(packet, 4, packet.length);
+    }
+
+    private static int safeVfsId(FileObject file) {
+        if (file == null) {
+            return -1;
+        }
+        try {
+            return file.getId();
+        } catch (Throwable ignored) {
+            return -1;
+        }
+    }
+
+    private Future<?> removeFileAsync(FileObject file) {
+        if (disposed.get() || !project.isOpen()) {
+            return CompletableFuture.completedFuture(null);
+        }
+        if (file == null) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        final int fileId = safeVfsId(file);
+        if (fileId <= 0) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        final CompletableFuture<Void> future = new CompletableFuture<>();
+        try {
+            writeExecutor.submit(() -> {
+                try {
+                    removeFileFromAllIndices(fileId);
+                } catch (Throwable ignored) {
+                } finally {
+                    future.complete(null);
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            future.complete(null);
+        }
+        return future;
+    }
+
+    private void removeFileFromAllIndices(int fileId) {
+        if (fileId <= 0) {
+            return;
+        }
+
+        indexLock.writeLock().lock();
+        try {
+            for (MapDBIndexWrapper wrapper : wrappers.values()) {
+                if (wrapper == null) continue;
+                Set<String> oldKeys;
+                try {
+                    oldKeys = wrapper.getForwardKeys(fileId);
+                } catch (Throwable t) {
+                    continue;
+                }
+
+                for (String oldKey : oldKeys) {
+                    try {
+                        wrapper.removeInvertedByFileId(oldKey, fileId);
+                    } catch (Throwable ignored) {
+                    }
+                }
+                try {
+                    wrapper.removeForward(fileId);
+                } catch (Throwable ignored) {
+                }
+            }
+            try {
+                db.commit();
+            } catch (Throwable ignored) {
+            }
+        } finally {
+            indexLock.writeLock().unlock();
+        }
     }
 }

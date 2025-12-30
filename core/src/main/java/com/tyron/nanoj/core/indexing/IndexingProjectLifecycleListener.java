@@ -17,7 +17,14 @@ public final class IndexingProjectLifecycleListener implements ProjectLifecycleL
     @Override
     public void projectOpened(Project project) {
         // Use the instance for this project (same as the parameter) to avoid surprises.
-        IndexManager.getInstance(this.project).onProjectOpened();
+        IndexManager manager = IndexManager.getInstance(this.project);
+        manager.onProjectOpened();
+
+        // Trigger initial scan input submission outside IndexManager.
+        try {
+            new IndexingInputCollector(this.project, manager).submitAll();
+        } catch (Throwable ignored) {
+        }
     }
 
     @Override

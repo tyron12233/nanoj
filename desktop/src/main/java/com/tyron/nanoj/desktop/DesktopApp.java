@@ -10,7 +10,7 @@ import com.tyron.nanoj.core.editor.EditorCore;
 import com.tyron.nanoj.core.indexing.IndexManager;
 import com.tyron.nanoj.core.project.ProjectLifecycle;
 import com.tyron.nanoj.core.service.ProjectServiceManager;
-import com.tyron.nanoj.core.vfs.VirtualFileManager;
+import com.tyron.nanoj.api.vfs.VirtualFileManager;
 import com.tyron.nanoj.desktop.ui.DesktopEditorManager;
 import com.tyron.nanoj.lang.java.JavaLanguageSupport;
 import com.tyron.nanoj.lang.java.plugins.JavaPlugin;
@@ -132,14 +132,9 @@ public final class DesktopApp {
         indexManager.register(new JavaFullClassNameIndex(project));
         indexManager.register(new JavaPackageIndex(project));
         indexManager.register(new JavaSuperTypeIndex(project));
-
-        indexJrtAsync(indexManager);
-
         project.getConfiguration().setProperty(IndexManager.DUMB_THRESHOLD_MS_KEY, "5000");
 
         ProjectLifecycle.fireProjectOpened(project);
-
-        indexManager.updateFile(mainFo);
 
         applyDarkEditorThemeToRsyntax();
 
@@ -229,31 +224,5 @@ public final class DesktopApp {
                 "        s.\n" +
                 "    }\n" +
                 "}\n";
-    }
-
-    private static void indexJrtAsync(IndexManager indexManager) {
-        Objects.requireNonNull(indexManager, "indexManager");
-
-            Thread t = new Thread(() -> {
-            try {
-                FileObject modulesRoot;
-                try {
-                    modulesRoot = VirtualFileManager.getInstance().find(URI.create("jrt:/modules"));
-                } catch (Throwable ignored) {
-                    // jrt may be unavailable (JDK8, stripped runtime, etc.)
-                    return;
-                }
-
-                if (modulesRoot == null || !modulesRoot.exists() || !modulesRoot.isFolder()) {
-                    return;
-                }
-
-                // IndexManager now understands folder/jrt/jar roots and will traverse+batch internally.
-                indexManager.updateFileAsync(modulesRoot);
-            } catch (Throwable ignored) {
-            }
-        }, "JRT-Indexer");
-        t.setDaemon(true);
-        t.start();
     }
 }

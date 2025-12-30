@@ -10,7 +10,8 @@ import com.tyron.nanoj.api.tasks.TaskResult;
 import com.tyron.nanoj.api.tasks.TasksService;
 import com.tyron.nanoj.api.vfs.FileObject;
 import com.tyron.nanoj.core.indexing.IndexManager;
-import com.tyron.nanoj.core.vfs.VirtualFileManager;
+import com.tyron.nanoj.api.vfs.VirtualFileManager;
+import com.tyron.nanoj.core.indexing.IndexingInputCollector;
 import com.tyron.nanoj.desktop.NanojCompletionPopup;
 import com.tyron.nanoj.desktop.diagnostics.NanojDiagnosticsParser;
 
@@ -50,6 +51,7 @@ public final class DesktopIdeFrame {
     private final JTabbedPane editorTabs;
     private final JTextArea console;
     private final JButton runButton;
+    private final JButton invalidateCachesButton;
 
     private final JLabel statusLabel;
     private final JProgressBar statusProgress;
@@ -74,6 +76,7 @@ public final class DesktopIdeFrame {
         this.console.setFont(resolveEditorFont(project, 12));
 
         this.runButton = new JButton("Run");
+        this.invalidateCachesButton = new JButton("Invalidate Caches");
 
         this.statusLabel = new JLabel(" ");
         this.statusLabel.setBorder(BorderFactory.createEmptyBorder(3, 8, 3, 8));
@@ -190,6 +193,7 @@ public final class DesktopIdeFrame {
         JToolBar toolbar = new JToolBar();
         toolbar.setFloatable(false);
         toolbar.add(runButton);
+        toolbar.add(invalidateCachesButton);
 
         // IntelliJ-ish FlatLaf styling hints (best-effort).
         try {
@@ -197,6 +201,7 @@ public final class DesktopIdeFrame {
             editorTabs.putClientProperty("JTabbedPane.tabAreaAlignment", "leading");
             toolbar.putClientProperty("JToolBar.isRollover", Boolean.TRUE);
             runButton.putClientProperty("JButton.buttonType", "toolBarButton");
+            invalidateCachesButton.putClientProperty("JButton.buttonType", "toolBarButton");
         } catch (Throwable ignored) {
         }
 
@@ -249,6 +254,49 @@ public final class DesktopIdeFrame {
 
         // Run button
         runButton.addActionListener(e -> runProject());
+
+        // Invalidate caches
+        invalidateCachesButton.addActionListener(e -> invalidateCaches());
+    }
+
+    private void invalidateCaches() {
+        invalidateCachesButton.setEnabled(false);
+        appendConsole("[cache] invalidating VFS + index...\n");
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                // 1) Invalidate VFS persistent cache.
+                VirtualFileManager vfm = VirtualFileManager.getInstance();
+                try {
+                    vfm.clear();
+                } catch (Throwable ignored) {
+                }
+                try {
+                    FileObject root = project.getRootDirectory();
+                    if (root != null) {
+                        vfm.trackRoot(root);
+                    }
+                } catch (Throwable ignored) {
+                }
+
+                // 2) Invalidate local index caches.
+                try {
+                    indexManager.invalidateLocalCachesAsync();
+                } catch (Throwable ignored) {
+                }
+
+                // 3) Re-submit indexing roots (lazy iterator).
+                try {
+                    new IndexingInputCollector(project, indexManager).submitAll();
+                } catch (Throwable ignored) {
+                }
+            } finally {
+                SwingUtilities.invokeLater(() -> {
+                    appendConsole("[cache] invalidation requested.\n");
+                    invalidateCachesButton.setEnabled(true);
+                });
+            }
+        });
     }
 
     private void renderIndexingStatus(IndexingProgressSnapshot snapshot) {

@@ -35,4 +35,11 @@ final class IndexDefinitionVersionStore {
         }
         return indexIdToVersion.put(indexId, version);
     }
+
+    void clear() {
+        try {
+            indexIdToVersion.clear();
+        } catch (Throwable ignored) {
+        }
+    }
 }

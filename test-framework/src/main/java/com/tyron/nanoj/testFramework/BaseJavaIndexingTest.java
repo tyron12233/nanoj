@@ -1,7 +1,7 @@
 package com.tyron.nanoj.testFramework;
 
 import com.tyron.nanoj.core.test.MockFileObject;
-import com.tyron.nanoj.core.vfs.VirtualFileManager;
+import com.tyron.nanoj.api.vfs.VirtualFileManager;
 
 import javax.tools.*;
 import java.io.ByteArrayOutputStream;
@@ -63,7 +63,7 @@ public abstract class BaseJavaIndexingTest extends BaseIdeTest {
         String path = "/libs/" + binaryName.replace('.', '/') + ".class";
 
         MockFileObject fo = new MockFileObject(path, content);
-        fs.registerFile(fo);
+        testVfs.registerFile(fo);
 
         VirtualFileManager.getInstance().fireFileCreated(fo);
         return fo;

@@ -9,7 +9,7 @@ import com.tyron.nanoj.core.indexing.IndexManager;
 import com.tyron.nanoj.core.indexing.SharedIndexBuilder;
 import com.tyron.nanoj.core.indexing.spi.IndexDefinition;
 import com.tyron.nanoj.core.service.ProjectServiceManager;
-import com.tyron.nanoj.core.vfs.VirtualFileManager;
+import com.tyron.nanoj.api.vfs.VirtualFileManager;
 import com.tyron.nanoj.lang.java.JavaLanguageSupport;
 import com.tyron.nanoj.lang.java.compiler.JavacFileManagerService;
 import com.tyron.nanoj.lang.java.indexing.JavaBinaryStubIndexer;

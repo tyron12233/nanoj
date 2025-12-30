@@ -5,10 +5,12 @@ import com.tyron.nanoj.core.concurrent.TaskSchedulerImpl;
 import com.tyron.nanoj.core.indexing.IndexManager;
 import com.tyron.nanoj.core.service.ApplicationServiceManager;
 import com.tyron.nanoj.core.service.ProjectServiceManager;
-import com.tyron.nanoj.core.test.MockFileSystem;
 import com.tyron.nanoj.core.test.MockFileObject;
 import com.tyron.nanoj.core.test.MockProject;
-import com.tyron.nanoj.core.vfs.VirtualFileManager;
+import com.tyron.nanoj.api.vfs.VirtualFileManager;
+import com.tyron.nanoj.core.vfs.JarFileSystem;
+import com.tyron.nanoj.core.vfs.JrtFileSystem;
+import com.tyron.nanoj.testFramework.vfs.TestVirtualFileManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
@@ -30,16 +32,13 @@ public abstract class BaseIdeTest {
     public File temporaryFolder;
 
     protected MockProject project;
-    protected MockFileSystem fs;
+    protected TestVirtualFileManager testVfs;
 
     @BeforeEach
     public final void baseSetUp() throws Exception {
         TestLogging.configureOnce();
         TestApplication.install();
-        resetVirtualFileSystem();
-
-        fs = new MockFileSystem();
-        VirtualFileManager.getInstance().register(fs);
+        installTestVirtualFileManager();
 
         File projectRoot = new File(temporaryFolder, "MyProject");
         if (!projectRoot.mkdirs()) {
@@ -106,7 +105,7 @@ public abstract class BaseIdeTest {
         }
         String fullPath = project.getRootDirectory().getPath() + "/" + path;
         MockFileObject fo = new MockFileObject(fullPath, content);
-        fs.registerFile(fo);
+        testVfs.registerFile(fo);
 
         VirtualFileManager.getInstance().fireFileCreated(fo);
         return fo;
@@ -116,7 +115,7 @@ public abstract class BaseIdeTest {
         String fullPath = project.getRootDirectory().getPath() + "/" + path;
         MockFileObject fo = new MockFileObject(fullPath, "");
         fo.setFolder(true);
-        fs.registerFile(fo);
+        testVfs.registerFile(fo);
         return fo;
     }
 
@@ -134,11 +133,15 @@ public abstract class BaseIdeTest {
         MockFileObject srcRoot = new MockFileObject(project.getRootDirectory().getPath() + "/src/main/java", "");
         srcRoot.setFolder(true);
         project.addSourceRoot(srcRoot);
-        fs.registerFile(srcRoot);
+        testVfs.registerFile(srcRoot);
     }
 
-    private void resetVirtualFileSystem() {
-        VirtualFileManager vfs = VirtualFileManager.getInstance();
-        vfs.clear();
+    private void installTestVirtualFileManager() {
+        testVfs = new TestVirtualFileManager();
+        // Ensure standard schemes used across core/lang tests resolve under the test VFM.
+        // 'file' is typically provided by per-test MockFileSystem registrations.
+        testVfs.register(JarFileSystem.getInstance());
+        testVfs.register(JrtFileSystem.getInstance());
+        ApplicationServiceManager.registerInstance(VirtualFileManager.class, testVfs);
     }
 }

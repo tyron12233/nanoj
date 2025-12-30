@@ -2,7 +2,7 @@ package com.tyron.nanoj.lang.java.compiler;
 
 import com.tyron.nanoj.api.project.Project;
 import com.tyron.nanoj.api.vfs.FileObject;
-import com.tyron.nanoj.core.vfs.VirtualFileManager;
+import com.tyron.nanoj.api.vfs.VirtualFileManager;
 import com.tyron.nanoj.core.indexing.IndexManager;
 import com.tyron.nanoj.core.indexing.SearchScope;
 import com.tyron.nanoj.core.indexing.Scopes;

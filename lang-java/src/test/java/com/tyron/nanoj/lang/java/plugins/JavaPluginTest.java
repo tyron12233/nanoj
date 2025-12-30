@@ -1,16 +1,21 @@
 package com.tyron.nanoj.lang.java.plugins;
 
 import com.tyron.nanoj.api.plugins.ProjectPluginRegistry;
+import com.tyron.nanoj.api.service.ServiceAccessHolder;
 import com.tyron.nanoj.api.tasks.Task;
 import com.tyron.nanoj.api.tasks.TaskResult;
 import com.tyron.nanoj.api.tasks.TasksService;
+import com.tyron.nanoj.api.vfs.FileObject;
 import com.tyron.nanoj.core.project.ProjectConfigLifecycleListener;
+import com.tyron.nanoj.core.service.ApplicationServiceManager;
 import com.tyron.nanoj.core.service.ProjectServiceManager;
 import com.tyron.nanoj.core.tasks.TasksServiceImpl;
 import com.tyron.nanoj.core.test.MockProject;
-import com.tyron.nanoj.core.vfs.VirtualFileManager;
+import com.tyron.nanoj.api.vfs.VirtualFileManager;
+import com.tyron.nanoj.core.vfs.VirtualFileManagerImpl;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import javax.tools.ToolProvider;
@@ -18,9 +23,15 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.jar.JarFile;
 
 public class JavaPluginTest {
+
+    @BeforeEach
+    public void setup() {
+        ApplicationServiceManager.registerBinding(VirtualFileManager.class, VirtualFileManagerImpl.class);
+    }
 
     @Test
     public void javaPluginCompilesResourcesAndBuildsJar() throws Exception {
@@ -59,28 +70,28 @@ public class JavaPluginTest {
         // MockProject(rootFo) gives us correct source/resource roots.
         MockProject project = new MockProject(cache.toFile(), rootFo) {
             @Override
-            public java.util.List<com.tyron.nanoj.api.vfs.FileObject> getSourceRoots() {
-                return java.util.List.of(VirtualFileManager.getInstance().find(srcRoot.toFile()));
+            public List<FileObject> getSourceRoots() {
+                return List.of(VirtualFileManager.getInstance().find(srcRoot.toFile()));
             }
 
             @Override
-            public java.util.List<com.tyron.nanoj.api.vfs.FileObject> getResourceRoots() {
-                return java.util.List.of(VirtualFileManager.getInstance().find(resRoot.toFile()));
+            public List<FileObject> getResourceRoots() {
+                return List.of(VirtualFileManager.getInstance().find(resRoot.toFile()));
             }
 
             @Override
-            public com.tyron.nanoj.api.vfs.FileObject getBuildDirectory() {
+            public FileObject getBuildDirectory() {
                 return buildFo;
             }
 
             @Override
-            public java.util.List<com.tyron.nanoj.api.vfs.FileObject> getClassPath() {
-                return java.util.List.of();
+            public List<FileObject> getClassPath() {
+                return List.of();
             }
 
             @Override
-            public java.util.List<com.tyron.nanoj.api.vfs.FileObject> getBootClassPath() {
-                return java.util.List.of();
+            public List<FileObject> getBootClassPath() {
+                return List.of();
             }
 
             @Override

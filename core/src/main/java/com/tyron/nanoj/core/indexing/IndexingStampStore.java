@@ -4,7 +4,11 @@ import com.tyron.nanoj.api.vfs.FileObject;
 import org.mapdb.DB;
 import org.mapdb.Serializer;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Persistent "was this file already indexed and unchanged?" tracking.
@@ -143,5 +147,45 @@ public final class IndexingStampStore {
     private static String key(String indexId, String path) {
         // Keep it compact and stable; NUL cannot appear in normal URI paths.
         return indexId + "\u0000" + path;
+    }
+
+    /**
+     * Best-effort snapshot of all file paths that have any stamp entry.
+     * <p>
+     * This is used to seed indexing inputs for backfill (e.g., when a new index definition is registered).
+     */
+    public List<String> getAllStampedPathsSnapshot() {
+        try {
+            Set<String> out = new HashSet<>();
+            for (String k : indexPathToLastModified.keySet()) {
+                if (k == null) continue;
+                int sep = k.indexOf('\u0000');
+                if (sep < 0 || sep + 1 >= k.length()) {
+                    continue;
+                }
+                String path = k.substring(sep + 1);
+                if (!path.isBlank()) {
+                    out.add(path);
+                }
+            }
+            return new ArrayList<>(out);
+        } catch (Throwable ignored) {
+            return List.of();
+        }
+    }
+
+    public void clear() {
+        try {
+            indexPathToLastModified.clear();
+        } catch (Throwable ignored) {
+        }
+        try {
+            indexPathToLength.clear();
+        } catch (Throwable ignored) {
+        }
+        try {
+            indexPathToVersion.clear();
+        } catch (Throwable ignored) {
+        }
     }
 }

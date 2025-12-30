@@ -3,7 +3,7 @@ package com.tyron.nanoj.core.indexing;
 import com.tyron.nanoj.api.vfs.FileObject;
 import com.tyron.nanoj.core.indexing.spi.IndexDefinition;
 import com.tyron.nanoj.core.test.MockFileObject;
-import com.tyron.nanoj.core.vfs.VirtualFileManager;
+import com.tyron.nanoj.api.vfs.VirtualFileManager;
 import com.tyron.nanoj.testFramework.BaseIdeTest;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -34,7 +34,7 @@ public class IndexManagerJarTraversalTest extends BaseIdeTest {
 
         String jarPath = project.getRootDirectory().getPath() + "/libs/test.jar";
         MockFileObject jarFo = new MockFileObject(jarPath, jarBytes);
-        fs.registerFile(jarFo);
+        testVfs.registerFile(jarFo);
         project.addLibrary(jarFo);
 
         manager.updateFile(jarFo);

@@ -14,7 +14,7 @@ import java.util.List;
  * This isolates the IDE core from the underlying storage mechanism (Disk vs Jar vs Ram).
  * Path separators should always be normalized to forward slashes '/'.
  */
-public interface FileObject {
+public interface FileObject extends FileObjectWithId {
 
     /**
      * @return The file name with extension (e.g., "Main.java").
@@ -62,6 +62,11 @@ public interface FileObject {
     boolean isFolder();
 
     boolean isReadOnly();
+
+    @Override
+    default int getId() {
+        return VirtualFileManager.getInstance().getFileId(this);
+    }
 
     long lastModified();
 

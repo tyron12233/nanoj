@@ -1,6 +1,7 @@
 package com.tyron.nanoj.core.vfs;
 
 import com.tyron.nanoj.api.vfs.FileObject;
+import com.tyron.nanoj.api.vfs.FileObjectWithId;
 
 import java.io.File;
 import java.io.IOException;

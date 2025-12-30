@@ -50,5 +50,9 @@ public final class ApplicationServiceManager {
      */
     public static void disposeApplication() {
         container.disposeAll();
+
+        // Reinstall default bindings after clearing.
+        // ServiceAccessBootstrap static initializer won't run again once loaded.
+        ServiceAccessBootstrap.installDefaultApplicationBindings();
     }
 }

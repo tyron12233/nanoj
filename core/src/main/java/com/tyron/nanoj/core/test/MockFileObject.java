@@ -1,6 +1,7 @@
 package com.tyron.nanoj.core.test;
 
 import com.tyron.nanoj.api.vfs.FileObject;
+import com.tyron.nanoj.api.vfs.FileObjectWithId;
 import java.io.*;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;

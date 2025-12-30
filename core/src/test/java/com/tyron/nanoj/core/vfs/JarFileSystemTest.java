@@ -25,7 +25,7 @@ public class JarFileSystemTest extends BaseIdeTest {
 
         String jarPath = project.getRootDirectory().getPath() + "/libs/test.jar";
         MockFileObject jarFo = new MockFileObject(jarPath, jarBytes);
-        fs.registerFile(jarFo);
+        testVfs.registerFile(jarFo);
         project.addLibrary(jarFo);
 
         URI jarRootUri = URI.create("jar:" + jarFo.toUri() + "!/");

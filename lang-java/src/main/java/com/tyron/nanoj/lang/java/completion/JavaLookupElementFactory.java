@@ -43,19 +43,19 @@ public final class JavaLookupElementFactory {
             return;
         }
 
-        String text;
-        try {
-            text = context.getDocument().getText();
-        } catch (Throwable t) {
-            text = null;
-        }
+//        String text;
+//        try {
+//            text = context.getDocument().getText();
+//        } catch (Throwable t) {
+//            text = null;
+//        }
 
-        if (text != null && offset < text.length()) {
-            char next = text.charAt(offset);
-            if (Character.isWhitespace(next)) {
-                return;
-            }
-        }
+//        if (text != null && offset < text.length()) {
+//            char next = text.charAt(offset);
+//            if (Character.isWhitespace(next)) {
+//                return;
+//            }
+//        }
 
         context.getDocument().insertString(offset, " ");
         context.setSelectionEndOffset(context.getSelectionEndOffset() + 1);

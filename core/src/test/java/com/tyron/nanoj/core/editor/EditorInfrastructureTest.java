@@ -6,7 +6,7 @@ import com.tyron.nanoj.api.editor.EditorManager;
 import com.tyron.nanoj.api.editor.FileDocumentManager;
 import com.tyron.nanoj.api.vfs.FileObject;
 import com.tyron.nanoj.core.vfs.LocalFileSystem;
-import com.tyron.nanoj.core.vfs.VirtualFileManager;
+import com.tyron.nanoj.api.vfs.VirtualFileManager;
 import com.tyron.nanoj.testFramework.BaseEditorTest;
 import org.junit.jupiter.api.Test;
 

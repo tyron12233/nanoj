@@ -2,7 +2,7 @@ package com.tyron.nanoj.core.project;
 
 import com.tyron.nanoj.api.tasks.ProjectRegistry;
 import com.tyron.nanoj.core.test.MockProject;
-import com.tyron.nanoj.core.vfs.VirtualFileManager;
+import com.tyron.nanoj.api.vfs.VirtualFileManager;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
