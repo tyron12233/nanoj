@@ -1,6 +1,8 @@
 package com.tyron.nanoj.api.project;
 
 import com.tyron.nanoj.api.service.Disposable;
+import com.tyron.nanoj.api.service.ServiceAccessHolder;
+import com.tyron.nanoj.api.service.ServiceHost;
 import com.tyron.nanoj.api.vfs.FileObject;
 
 import java.io.File;
@@ -14,7 +16,7 @@ import java.util.Set;
  * It defines where source files live, where libraries are found, and where output goes.
  * </p>
  */
-public interface Project extends Disposable {
+public interface Project extends Disposable, ServiceHost {
 
     /**
      * @return The display name of the project (e.g., "MyApplication").
@@ -73,6 +75,20 @@ public interface Project extends Disposable {
      * Background tasks should check this before running expensive operations.
      */
     boolean isOpen();
+
+    /**
+     * Convenience access to project-scoped services.
+     */
+    default <T> T getService(Class<T> serviceClass) {
+        return ServiceAccessHolder.get().getProjectService(this, serviceClass);
+    }
+
+    /**
+     * Convenience access to project-scoped extensions.
+     */
+    default <E> List<E> getExtensions(Class<E> extensionPoint) {
+        return ServiceAccessHolder.get().getProjectExtensions(this, extensionPoint);
+    }
 
     /**
      * Generic configuration wrapper (Key-Value store).

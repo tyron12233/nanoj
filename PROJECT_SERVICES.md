@@ -1,6 +1,6 @@
-# Project services in Nanoj (`ProjectServiceManager`)
+# Services in Nanoj (scoped containers)
 
-This document explains Nanoj’s project-scoped service container:
+This document explains Nanoj’s scoped service containers:
 
 - what it’s for (and what it is not)
 - how services and “extensions” are created and cached
@@ -9,7 +9,8 @@ This document explains Nanoj’s project-scoped service container:
 
 > Design note
 >
-> The concept is **inspired by IntelliJ IDEA’s project/application services** and the platform’s service/extension-point approach: services are lazily created singletons scoped to a project, and extension points allow multiple implementations. Nanoj’s implementation is intentionally lightweight and uses reflection + a small registry.
+> The concept is **inspired by IntelliJ IDEA’s application/project services** and the platform’s service/extension-point approach.
+> Nanoj’s implementation is intentionally lightweight and uses reflection + a small registry.
 
 ## What problem it solves
 
@@ -19,7 +20,9 @@ Nanoj needs a way to wire together core subsystems (indexing, editor, completion
 - eager initialization at startup (bad for latency and memory on mobile)
 - a heavyweight DI framework (extra allocations/overhead)
 
-`ProjectServiceManager` provides:
+Nanoj provides:
+
+- **Application scope**: one container for global services
 
 - **Project scope**: each `Project` gets its own container
 - **Lazy creation**: instances are created on first access
@@ -28,13 +31,28 @@ Nanoj needs a way to wire together core subsystems (indexing, editor, completion
 
 ## Core API
 
-File: `core/src/main/java/com/tyron/nanoj/core/service/ProjectServiceManager.java`
+Files:
 
-### Services (singleton per project)
+- `core/src/main/java/com/tyron/nanoj/core/service/ApplicationServiceManager.java`
+- `core/src/main/java/com/tyron/nanoj/core/service/ProjectServiceManager.java`
+- `core/src/main/java/com/tyron/nanoj/core/service/DefaultServiceContainer.java`
+- `core/src/main/java/com/tyron/nanoj/core/service/ServiceContainer.java`
+- `core/src/main/java/com/tyron/nanoj/core/service/ServiceContext.java`
+
+### Project services (singleton per project)
 
 - `getService(project, SomeService.class)`
   - returns the project’s singleton instance
   - creates it lazily on first call
+
+### Application services (singleton per application)
+
+- `ApplicationManager.getApplication().getService(SomeService.class)`
+  - convenience access to application services
+
+or (from core code):
+
+- `ApplicationServiceManager.getService(SomeService.class)`
 
 Bindings:
 
@@ -51,7 +69,7 @@ Instance registration:
 - `registerInstance(project, SomeService.class, instance)`
   - directly installs an already-created instance
 
-### Extensions (multi-instance per project)
+### Extensions (multi-instance per scope)
 
 Extensions are for “multiple implementations of a point”, e.g. language supports or detectors.
 
@@ -61,6 +79,15 @@ Extensions are for “multiple implementations of a point”, e.g. language supp
 - `getExtensions(project, ExtensionPoint.class)`
   - returns an unmodifiable list of lazily-created instances
   - instances are cached after first creation
+
+Application scope uses the same API shape:
+
+- `ApplicationManager.getApplication().getExtensions(...)`
+
+or (from core code):
+
+- `ApplicationServiceManager.registerExtension(...)`
+- `ApplicationServiceManager.getExtensions(...)`
 
 ### Project disposal
 
@@ -75,13 +102,15 @@ Also note:
 
 ## How it works internally
 
-### One container per project
+### One container per scope
 
 `ProjectServiceManager` keeps:
 
 - `Map<Project, ServiceContainer> projectContainers`
 
-A `ServiceContainer` owns all state for a single project.
+A `ServiceContainer` owns all state for a single scope.
+
+Project containers are independent from the application container.
 
 ### Service caching
 
@@ -118,13 +147,23 @@ Calling `getExtensions(project, Point.class)`:
 
 If you register a new extension implementation at runtime, the cache for that point is invalidated.
 
-### Instantiation rule (constructor injection)
+### Instantiation rules (constructor injection)
 
-All services and extensions are instantiated via reflection and must provide:
+All services and extensions are instantiated via reflection.
+
+Project scope prefers:
 
 - `public <ServiceOrExtension>(Project project)`
 
-If it is missing, Nanoj throws `ServiceInstantiationException`.
+If that constructor is missing, it falls back to:
+
+- `public <ServiceOrExtension>()`
+
+Application scope requires:
+
+- `public <ServiceOrExtension>()`
+
+If the required constructor is missing, Nanoj throws `ServiceInstantiationException`.
 
 ### Disposal
 
@@ -176,6 +215,19 @@ If a service owns resources (threads, file handles, DBs):
 Then ensure the project’s disposal path calls:
 
 - `ProjectServiceManager.disposeProject(project)`
+
+## Scope rules (important)
+
+- `ProjectServiceManager.getService(project, X.class)` retrieves a **project** service.
+- `ApplicationServiceManager.getService(X.class)` retrieves an **application** service.
+
+Scopes are explicit (no automatic fallback between them).
+
+## Migration guide (old → new)
+
+- Existing code using `ProjectServiceManager` should keep working unchanged.
+- New global services should be registered in `ApplicationServiceManager`.
+- If you previously relied on “everything is project scoped”, you still get that by default.
 
 ## Relationship to IntelliJ concepts
 

@@ -1,5 +1,7 @@
 package com.tyron.nanoj.api.dumb;
 
+import com.tyron.nanoj.api.project.Project;
+
 /**
  * IntelliJ-like "dumb mode" support.
  * <p>
@@ -7,6 +9,10 @@ package com.tyron.nanoj.api.dumb;
  * should degrade gracefully (e.g., skip heavy completion providers).
  */
 public interface DumbService {
+
+    static DumbService getInstance(Project project) {
+        return project.getService(DumbService.class);
+    }
 
     /**
      * @return true if the IDE is currently in dumb mode.
