@@ -3,6 +3,7 @@ package com.tyron.nanoj.testFramework;
 import com.tyron.nanoj.api.concurrent.TaskScheduler;
 import com.tyron.nanoj.core.concurrent.TaskSchedulerImpl;
 import com.tyron.nanoj.core.indexing.IndexManager;
+import com.tyron.nanoj.core.service.ApplicationServiceManager;
 import com.tyron.nanoj.core.service.ProjectServiceManager;
 import com.tyron.nanoj.core.test.MockFileSystem;
 import com.tyron.nanoj.core.test.MockFileObject;
@@ -36,6 +37,7 @@ public abstract class BaseIdeTest {
     @BeforeEach
     public final void baseSetUp() throws Exception {
         TestLogging.configureOnce();
+        TestApplication.install();
         resetVirtualFileSystem();
 
         fs = new MockFileSystem();
@@ -70,6 +72,7 @@ public abstract class BaseIdeTest {
                 ProjectServiceManager.disposeProject(project);
                 project.dispose();
             }
+            ApplicationServiceManager.disposeApplication();
         }
     }
 
