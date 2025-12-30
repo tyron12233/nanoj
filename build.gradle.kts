@@ -8,8 +8,14 @@ import org.gradle.jvm.toolchain.JavaLanguageVersion
 group = "org.example"
 version = "1.0-SNAPSHOT"
 
-repositories {
-    mavenCentral()
+allprojects {
+    repositories {
+        // Prefer repo1 as a fallback when repo.maven.apache.org is intermittently blocked (HTTP 403) on some runners.
+        maven {
+            url = uri("https://repo1.maven.org/maven2")
+        }
+        mavenCentral()
+    }
 }
 
 subprojects {
