@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  checks: write
 
 concurrency:
   group: tests-${{ github.ref }}
@@ -27,8 +28,87 @@ jobs:
           java-version: "17"
           cache: gradle
 
+      - name: Cache NanoJ shared indexes
+        uses: actions/cache@v4
+        with:
+          path: .nanoj/shared-indexes
+          key: nanoj-shared-indexes-${{ runner.os }}-jdk17-max2000-v1
+
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
 
       - name: Run tests
-        run: ./gradlew test --no-daemon -Dorg.gradle.java.installations.auto-download=true
+        run: |
+          ./gradlew test \
+            --no-daemon \
+            -Dorg.gradle.java.installations.auto-download=true \
+            -Dnanoj.test.useSharedIndexes=true \
+            -Dnanoj.test.buildSharedIndexes=true \
+            -Dnanoj.test.sharedIndexDir=.nanoj/shared-indexes \
+            -Dnanoj.test.jrt.maxClasses=30000
+
+      - name: Publish test report (GitHub Checks)
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Gradle Tests
+          path: "**/build/test-results/test/*.xml"
+          reporter: java-junit
+
+      - name: Test summary (Markdown)
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import glob
+          import os
+          import xml.etree.ElementTree as ET
+
+          files = glob.glob('**/build/test-results/test/*.xml', recursive=True)
+          out_path = os.environ.get('GITHUB_STEP_SUMMARY')
+
+          if not out_path:
+            raise SystemExit('GITHUB_STEP_SUMMARY is not set')
+
+          total = failures = errors = skipped = 0
+          suites = 0
+          parsed = 0
+
+          for f in files:
+            try:
+              root = ET.parse(f).getroot()
+            except Exception:
+              continue
+
+            if root.tag != 'testsuite':
+              continue
+
+            suites += 1
+            parsed += 1
+            total += int(root.attrib.get('tests', 0) or 0)
+            failures += int(root.attrib.get('failures', 0) or 0)
+            errors += int(root.attrib.get('errors', 0) or 0)
+            skipped += int(root.attrib.get('skipped', 0) or 0)
+
+          with open(out_path, 'a', encoding='utf-8') as w:
+            w.write('## Test Results\n')
+            if parsed == 0:
+              w.write('No JUnit XML reports found.\n')
+            else:
+              w.write(f'- Suites: {suites}\n')
+              w.write(f'- Tests: {total}\n')
+              w.write(f'- Failures: {failures}\n')
+              w.write(f'- Errors: {errors}\n')
+              w.write(f'- Skipped: {skipped}\n')
+          PY
+
+      - name: Upload test reports (artifacts)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          if-no-files-found: ignore
+          retention-days: 7
+          path: |
+            **/build/test-results/test/**
+            **/build/reports/tests/test/**
