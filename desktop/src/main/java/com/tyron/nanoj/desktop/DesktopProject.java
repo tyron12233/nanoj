@@ -30,6 +30,7 @@ final class DesktopProject implements Project {
             FileObject rootDirectory,
             File cacheDir,
             List<FileObject> sourceRoots,
+            List<FileObject> resourceRoots,
             FileObject buildDirectory
     ) {
         this.name = Objects.requireNonNull(name, "name");
@@ -37,7 +38,7 @@ final class DesktopProject implements Project {
         this.cacheDir = Objects.requireNonNull(cacheDir, "cacheDir");
 
         this.sourceRoots = Collections.unmodifiableList(new ArrayList<>(Objects.requireNonNull(sourceRoots, "sourceRoots")));
-        this.resourceRoots = List.of();
+        this.resourceRoots = Collections.unmodifiableList(new ArrayList<>(Objects.requireNonNull(resourceRoots, "resourceRoots")));
         this.classPath = List.of();
         this.bootClassPath = List.of();
 

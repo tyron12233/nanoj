@@ -19,7 +19,7 @@ import java.awt.event.KeyEvent;
 import java.util.List;
 import java.util.Objects;
 
-final class NanojCompletionPopup {
+public final class NanojCompletionPopup {
 
     private final Project project;
     private final FileObject file;
@@ -33,7 +33,7 @@ final class NanojCompletionPopup {
 
     private final Timer updateTimer;
 
-    NanojCompletionPopup(Project project, FileObject file, JTextComponent editor) {
+    public NanojCompletionPopup(Project project, FileObject file, JTextComponent editor) {
         this.project = Objects.requireNonNull(project, "project");
         this.file = Objects.requireNonNull(file, "file");
         this.editor = Objects.requireNonNull(editor, "editor");
