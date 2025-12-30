@@ -67,6 +67,8 @@ public final class DesktopApp {
     private void start() throws IOException {
         installDarkLookAndFeel();
 
+        DesktopApplication.install();
+
         // 1) Create (or reuse) a persistent project directory.
         // Persisting the project root + cache dir means MapDB index files survive restarts.
         Path rootPath = resolveDesktopProjectRoot();
