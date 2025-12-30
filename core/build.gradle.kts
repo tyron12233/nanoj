@@ -17,6 +17,7 @@ dependencies {
     implementation("org.mapdb:mapdb:3.0.10")
 
     implementation(project(":api"))
+    implementation("org.yaml:snakeyaml:2.2")
 }
 
 tasks.test {
