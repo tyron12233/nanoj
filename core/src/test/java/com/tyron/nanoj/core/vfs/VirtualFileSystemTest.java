@@ -13,14 +13,12 @@ import org.junit.jupiter.api.Test;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 public class VirtualFileSystemTest {
 
@@ -30,7 +28,7 @@ public class VirtualFileSystemTest {
     @BeforeEach
     public void setUp() throws IOException {
         tempDir = Files.createTempDirectory("nanoj_vfs_test");
-        root = VirtualFileSystem.getInstance().find(tempDir.toFile());
+        root = VirtualFileManager.getInstance().find(tempDir.toFile());
     }
 
     @AfterEach
@@ -45,7 +43,7 @@ public class VirtualFileSystemTest {
 
     @Test
     public void testResolveFile() {
-        FileObject fo = VirtualFileSystem.getInstance().find(tempDir.toFile());
+        FileObject fo = VirtualFileManager.getInstance().find(tempDir.toFile());
         Assertions.assertNotNull(fo);
         Assertions.assertTrue(fo.exists());
         Assertions.assertTrue(fo.isFolder());
@@ -131,7 +129,7 @@ public class VirtualFileSystemTest {
         };
 
         // Register global listener
-        VirtualFileSystem.getInstance().addGlobalListener(listener);
+        VirtualFileManager.getInstance().addGlobalListener(listener);
 
         try {
             FileObject file = root.createFile("EventTest.txt");
@@ -153,14 +151,14 @@ public class VirtualFileSystemTest {
             Assertions.assertTrue(events.contains("RENAMED: Old.txt -> New.txt"));
 
         } finally {
-            VirtualFileSystem.getInstance().removeGlobalListener(listener);
+            VirtualFileManager.getInstance().removeGlobalListener(listener);
         }
     }
     
     @Test
     public void testEquality() {
-        FileObject a = VirtualFileSystem.getInstance().find(new File(tempDir.toFile(), "A.txt"));
-        FileObject b = VirtualFileSystem.getInstance().find(new File(tempDir.toFile(), "A.txt"));
+        FileObject a = VirtualFileManager.getInstance().find(new File(tempDir.toFile(), "A.txt"));
+        FileObject b = VirtualFileManager.getInstance().find(new File(tempDir.toFile(), "A.txt"));
 
         Assertions.assertEquals(a, b, "Two objects pointing to same path should be equal");
         Assertions.assertEquals(a.hashCode(), b.hashCode());

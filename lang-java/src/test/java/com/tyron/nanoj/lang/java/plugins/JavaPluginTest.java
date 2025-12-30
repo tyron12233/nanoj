@@ -8,7 +8,7 @@ import com.tyron.nanoj.core.project.ProjectConfigLifecycleListener;
 import com.tyron.nanoj.core.service.ProjectServiceManager;
 import com.tyron.nanoj.core.tasks.TasksServiceImpl;
 import com.tyron.nanoj.core.test.MockProject;
-import com.tyron.nanoj.core.vfs.VirtualFileSystem;
+import com.tyron.nanoj.core.vfs.VirtualFileManager;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
@@ -53,19 +53,19 @@ public class JavaPluginTest {
                       jarName: demo.jar
                 """, StandardCharsets.UTF_8);
 
-        var rootFo = VirtualFileSystem.getInstance().find(root.toFile());
-        var buildFo = VirtualFileSystem.getInstance().find(root.resolve("build").toFile());
+        var rootFo = VirtualFileManager.getInstance().find(root.toFile());
+        var buildFo = VirtualFileManager.getInstance().find(root.resolve("build").toFile());
 
         // MockProject(rootFo) gives us correct source/resource roots.
         MockProject project = new MockProject(cache.toFile(), rootFo) {
             @Override
             public java.util.List<com.tyron.nanoj.api.vfs.FileObject> getSourceRoots() {
-                return java.util.List.of(VirtualFileSystem.getInstance().find(srcRoot.toFile()));
+                return java.util.List.of(VirtualFileManager.getInstance().find(srcRoot.toFile()));
             }
 
             @Override
             public java.util.List<com.tyron.nanoj.api.vfs.FileObject> getResourceRoots() {
-                return java.util.List.of(VirtualFileSystem.getInstance().find(resRoot.toFile()));
+                return java.util.List.of(VirtualFileManager.getInstance().find(resRoot.toFile()));
             }
 
             @Override

@@ -8,16 +8,14 @@ import com.tyron.nanoj.core.service.ProjectServiceManager;
 import com.tyron.nanoj.core.test.MockFileSystem;
 import com.tyron.nanoj.core.test.MockFileObject;
 import com.tyron.nanoj.core.test.MockProject;
-import com.tyron.nanoj.core.vfs.VirtualFileSystem;
+import com.tyron.nanoj.core.vfs.VirtualFileManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
-import java.util.Map;
 
 /**
  * Base class for all IDE tests.
@@ -41,7 +39,7 @@ public abstract class BaseIdeTest {
         resetVirtualFileSystem();
 
         fs = new MockFileSystem();
-        VirtualFileSystem.getInstance().register(fs);
+        VirtualFileManager.getInstance().register(fs);
 
         File projectRoot = new File(temporaryFolder, "MyProject");
         if (!projectRoot.mkdirs()) {
@@ -110,7 +108,7 @@ public abstract class BaseIdeTest {
         MockFileObject fo = new MockFileObject(fullPath, content);
         fs.registerFile(fo);
 
-        VirtualFileSystem.getInstance().fireFileCreated(fo);
+        VirtualFileManager.getInstance().fireFileCreated(fo);
         return fo;
     }
 
@@ -140,7 +138,7 @@ public abstract class BaseIdeTest {
     }
 
     private void resetVirtualFileSystem() {
-        VirtualFileSystem vfs = VirtualFileSystem.getInstance();
+        VirtualFileManager vfs = VirtualFileManager.getInstance();
         vfs.clear();
     }
 }

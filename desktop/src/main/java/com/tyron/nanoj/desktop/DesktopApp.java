@@ -1,7 +1,6 @@
 package com.tyron.nanoj.desktop;
 
 import com.tyron.nanoj.api.language.LanguageSupport;
-import com.tyron.nanoj.api.dumb.DumbService;
 import com.tyron.nanoj.api.editor.EditorManager;
 import com.tyron.nanoj.api.project.Project;
 import com.tyron.nanoj.api.plugins.ProjectPluginRegistry;
@@ -11,7 +10,7 @@ import com.tyron.nanoj.core.editor.EditorCore;
 import com.tyron.nanoj.core.indexing.IndexManager;
 import com.tyron.nanoj.core.project.ProjectLifecycle;
 import com.tyron.nanoj.core.service.ProjectServiceManager;
-import com.tyron.nanoj.core.vfs.VirtualFileSystem;
+import com.tyron.nanoj.core.vfs.VirtualFileManager;
 import com.tyron.nanoj.desktop.ui.DesktopEditorManager;
 import com.tyron.nanoj.lang.java.JavaLanguageSupport;
 import com.tyron.nanoj.lang.java.plugins.JavaPlugin;
@@ -21,7 +20,6 @@ import com.tyron.nanoj.lang.java.indexing.JavaFullClassNameIndex;
 import com.tyron.nanoj.lang.java.indexing.JavaPackageIndex;
 import com.tyron.nanoj.lang.java.indexing.ShortClassNameIndex;
 import com.tyron.nanoj.lang.java.indexing.JavaSuperTypeIndex;
-import org.fife.ui.rsyntaxtextarea.Theme;
 
 import javax.swing.*;
 import java.awt.event.WindowAdapter;
@@ -89,16 +87,16 @@ public final class DesktopApp {
                     StandardCharsets.UTF_8);
         }
 
-        FileObject rootFo = VirtualFileSystem.getInstance().find(rootPath.toFile());
-        FileObject srcRootFo = VirtualFileSystem.getInstance().find(srcRootPath.toFile());
-        FileObject resourcesRootFo = VirtualFileSystem.getInstance().find(resourcesRootPath.toFile());
-        FileObject mainFo = VirtualFileSystem.getInstance().find(mainPath.toFile());
+        FileObject rootFo = VirtualFileManager.getInstance().find(rootPath.toFile());
+        FileObject srcRootFo = VirtualFileManager.getInstance().find(srcRootPath.toFile());
+        FileObject resourcesRootFo = VirtualFileManager.getInstance().find(resourcesRootPath.toFile());
+        FileObject mainFo = VirtualFileManager.getInstance().find(mainPath.toFile());
 
         Path cachePath = resolveDesktopCacheDir();
         Files.createDirectories(cachePath);
         File cacheDir = cachePath.toFile();
 
-        FileObject buildFo = VirtualFileSystem.getInstance().find(rootPath.resolve("build").toFile());
+        FileObject buildFo = VirtualFileManager.getInstance().find(rootPath.resolve("build").toFile());
 
         Project project = new DesktopProject(
                 "DesktopTempProject",
@@ -240,7 +238,7 @@ public final class DesktopApp {
             try {
                 FileObject modulesRoot;
                 try {
-                    modulesRoot = VirtualFileSystem.getInstance().find(URI.create("jrt:/modules"));
+                    modulesRoot = VirtualFileManager.getInstance().find(URI.create("jrt:/modules"));
                 } catch (Throwable ignored) {
                     // jrt may be unavailable (JDK8, stripped runtime, etc.)
                     return;

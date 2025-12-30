@@ -3,15 +3,13 @@ package com.tyron.nanoj.lang.java.completion;
 import com.tyron.nanoj.api.completion.CodeCompletionService;
 import com.tyron.nanoj.api.completion.LookupElement;
 import com.tyron.nanoj.api.completion.LookupElementPresentation;
-import com.tyron.nanoj.api.indexing.IndexingProgressListener;
-import com.tyron.nanoj.api.indexing.IndexingProgressSnapshot;
 import com.tyron.nanoj.api.language.LanguageSupport;
 import com.tyron.nanoj.api.vfs.FileObject;
 import com.tyron.nanoj.core.indexing.IndexManager;
 import com.tyron.nanoj.core.indexing.SharedIndexBuilder;
 import com.tyron.nanoj.core.indexing.spi.IndexDefinition;
 import com.tyron.nanoj.core.service.ProjectServiceManager;
-import com.tyron.nanoj.core.vfs.VirtualFileSystem;
+import com.tyron.nanoj.core.vfs.VirtualFileManager;
 import com.tyron.nanoj.lang.java.JavaLanguageSupport;
 import com.tyron.nanoj.lang.java.compiler.JavacFileManagerService;
 import com.tyron.nanoj.lang.java.indexing.JavaBinaryStubIndexer;
@@ -21,7 +19,6 @@ import com.tyron.nanoj.lang.java.indexing.ShortClassNameIndex;
 import com.tyron.nanoj.lang.java.indexing.JavaSuperTypeIndex;
 import com.tyron.nanoj.lang.java.source.ParsingManager;
 import com.tyron.nanoj.testFramework.BaseCompletionTest;
-import com.tyron.nanoj.testFramework.Stopwatch;
 import com.tyron.nanoj.testFramework.FreshIndices;
 import org.junit.jupiter.api.Assumptions;
 
@@ -272,7 +269,7 @@ public abstract class BaseJavaCompletionTest extends BaseCompletionTest {
                 break;
             }
             try {
-                FileObject pkgRoot = VirtualFileSystem.getInstance().find(URI.create(root));
+                FileObject pkgRoot = VirtualFileManager.getInstance().find(URI.create(root));
                 collectClassFilesRecursively(pkgRoot, remaining, toIndex);
             } catch (Throwable ignored) {
                 break;
@@ -311,7 +308,7 @@ public abstract class BaseJavaCompletionTest extends BaseCompletionTest {
                 break;
             }
             try {
-                FileObject pkgRoot = VirtualFileSystem.getInstance().find(URI.create(root));
+                FileObject pkgRoot = VirtualFileManager.getInstance().find(URI.create(root));
                 collectClassFilesRecursively(pkgRoot, remaining, toIndex);
             } catch (Throwable ignored) {
                 // jrt: not available (e.g., JDK8) or blocked.
@@ -343,7 +340,7 @@ public abstract class BaseJavaCompletionTest extends BaseCompletionTest {
         if ("jar".equalsIgnoreCase(ext)) {
             // Walk jar contents via jar: filesystem.
             URI jarUri = entry.toUri();
-            FileObject jarRoot = VirtualFileSystem.getInstance().find(URI.create("jar:" + jarUri + "!/"));
+            FileObject jarRoot = VirtualFileManager.getInstance().find(URI.create("jar:" + jarUri + "!/"));
             List<FileObject> files = new ArrayList<>();
             collectClassFilesRecursively(jarRoot, null, files);
             indexManager.updateFilesAsync(files);

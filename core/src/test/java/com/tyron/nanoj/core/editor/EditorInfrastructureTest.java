@@ -6,7 +6,7 @@ import com.tyron.nanoj.api.editor.EditorManager;
 import com.tyron.nanoj.api.editor.FileDocumentManager;
 import com.tyron.nanoj.api.vfs.FileObject;
 import com.tyron.nanoj.core.vfs.LocalFileSystem;
-import com.tyron.nanoj.core.vfs.VirtualFileSystem;
+import com.tyron.nanoj.core.vfs.VirtualFileManager;
 import com.tyron.nanoj.testFramework.BaseEditorTest;
 import org.junit.jupiter.api.Test;
 
@@ -21,7 +21,7 @@ public class EditorInfrastructureTest extends BaseEditorTest {
     protected void beforeEach() throws Exception {
         super.beforeEach();
 
-        VirtualFileSystem.getInstance().register(LocalFileSystem.getInstance());
+        VirtualFileManager.getInstance().register(LocalFileSystem.getInstance());
     }
 
     @Test
@@ -29,7 +29,7 @@ public class EditorInfrastructureTest extends BaseEditorTest {
         File javaFile = new File(temporaryFolder, "Main.java");
         Files.writeString(javaFile.toPath(), "class Main {}\n");
 
-        FileObject fileObject = VirtualFileSystem.getInstance().find(javaFile);
+        FileObject fileObject = VirtualFileManager.getInstance().find(javaFile);
 
         FileDocumentManager fdm = FileDocumentManagerImpl.getInstance(project);
         EditorManager em = EditorManagerImpl.getInstance(project);

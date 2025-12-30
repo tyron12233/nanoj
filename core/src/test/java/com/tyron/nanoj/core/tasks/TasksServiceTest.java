@@ -10,7 +10,7 @@ import com.tyron.nanoj.api.tasks.TasksService;
 import com.tyron.nanoj.api.vfs.FileObject;
 import com.tyron.nanoj.core.service.ProjectServiceManager;
 import com.tyron.nanoj.core.test.MockProject;
-import com.tyron.nanoj.core.vfs.VirtualFileSystem;
+import com.tyron.nanoj.core.vfs.VirtualFileManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -514,7 +514,7 @@ public class TasksServiceTest {
     }
 
     private static FileObject vfsFile(File file) {
-        return VirtualFileSystem.getInstance().find(file);
+        return VirtualFileManager.getInstance().find(file);
     }
 
     private static void writeText(FileObject file, String text) throws IOException {

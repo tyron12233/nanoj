@@ -10,7 +10,7 @@ import com.tyron.nanoj.api.vfs.FileEvent;
 import com.tyron.nanoj.api.vfs.FileObject;
 import com.tyron.nanoj.api.vfs.VfsSnapshot;
 import com.tyron.nanoj.api.vfs.VfsSnapshots;
-import com.tyron.nanoj.core.vfs.VirtualFileSystem;
+import com.tyron.nanoj.core.vfs.VirtualFileManager;
 import org.mapdb.DB;
 import org.mapdb.DBMaker;
 import org.mapdb.HTreeMap;
@@ -80,7 +80,7 @@ public final class TasksServiceImpl implements TasksService, Disposable {
 
         this.stateByTaskId = db.hashMap("sys_tasks_state", Serializer.STRING, Serializer.BYTE_ARRAY).createOrOpen();
 
-        VirtualFileSystem.getInstance().addGlobalListener(vfsListener);
+        VirtualFileManager.getInstance().addGlobalListener(vfsListener);
     }
 
     @Override
@@ -105,7 +105,7 @@ public final class TasksServiceImpl implements TasksService, Disposable {
 
         // Absolute path or URI-like -> delegate to VFS
         if (p.startsWith("/") || p.contains("://") || p.startsWith("jar:")) {
-            return VirtualFileSystem.getInstance().find(p);
+            return VirtualFileManager.getInstance().find(p);
         }
 
         // Project-relative path -> resolve via root directory
@@ -170,7 +170,7 @@ public final class TasksServiceImpl implements TasksService, Disposable {
 
     @Override
     public void dispose() {
-        VirtualFileSystem.getInstance().removeGlobalListener(vfsListener);
+        VirtualFileManager.getInstance().removeGlobalListener(vfsListener);
         db.close();
     }
 
@@ -492,7 +492,7 @@ public final class TasksServiceImpl implements TasksService, Disposable {
             String hash = null;
             if (mode == TaskFingerprintMode.CONTENT_HASH && e.exists() && !e.isFolder()) {
                 try {
-                    FileObject fo = VirtualFileSystem.getInstance().find(e.getPath());
+                    FileObject fo = VirtualFileManager.getInstance().find(e.getPath());
                     hash = sha256Hex(fo);
                 } catch (Throwable ignored) {
                     hash = null;

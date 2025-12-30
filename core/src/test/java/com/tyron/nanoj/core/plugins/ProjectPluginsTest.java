@@ -7,7 +7,7 @@ import com.tyron.nanoj.core.project.ProjectConfigLifecycleListener;
 import com.tyron.nanoj.core.service.ProjectServiceManager;
 import com.tyron.nanoj.core.tasks.TasksServiceImpl;
 import com.tyron.nanoj.core.test.MockProject;
-import com.tyron.nanoj.core.vfs.VirtualFileSystem;
+import com.tyron.nanoj.core.vfs.VirtualFileManager;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -31,7 +31,7 @@ public class ProjectPluginsTest {
                   - p2
                 """, StandardCharsets.UTF_8);
 
-        var rootFo = VirtualFileSystem.getInstance().find(root.toFile());
+        var rootFo = VirtualFileManager.getInstance().find(root.toFile());
         MockProject project = new MockProject(cache.toFile(), rootFo);
 
         // Ensure TasksService.getInstance(project) works inside plugin apply.

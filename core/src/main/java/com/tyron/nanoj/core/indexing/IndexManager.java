@@ -11,7 +11,7 @@ import com.tyron.nanoj.api.vfs.FileObject;
 import com.tyron.nanoj.core.dumb.DumbCore;
 import com.tyron.nanoj.core.indexing.spi.IndexDefinition;
 import com.tyron.nanoj.core.service.ProjectServiceManager;
-import com.tyron.nanoj.core.vfs.VirtualFileSystem;
+import com.tyron.nanoj.core.vfs.VirtualFileManager;
 import org.mapdb.Atomic;
 import org.mapdb.DB;
 import org.mapdb.DBMaker;
@@ -269,7 +269,7 @@ public class IndexManager implements Disposable {
         }
 
         if (vfsListenerAttached.compareAndSet(false, true)) {
-            VirtualFileSystem.getInstance().addGlobalListener(vfsListener);
+            VirtualFileManager.getInstance().addGlobalListener(vfsListener);
         }
     }
 
@@ -1353,7 +1353,7 @@ public class IndexManager implements Disposable {
     private FileObject resolveJarRoot(FileObject jarFile) {
         try {
             URI jarRoot = URI.create("jar:" + jarFile.toUri() + "!/");
-            return VirtualFileSystem.getInstance().find(jarRoot);
+            return VirtualFileManager.getInstance().find(jarRoot);
         } catch (Throwable ignored) {
             return null;
         }
@@ -1703,7 +1703,7 @@ public class IndexManager implements Disposable {
         }
 
         if (vfsListenerAttached.get()) {
-            VirtualFileSystem.getInstance().removeGlobalListener(vfsListener);
+            VirtualFileManager.getInstance().removeGlobalListener(vfsListener);
         }
 
         // Stop scheduling any "enter dumb mode" timers.

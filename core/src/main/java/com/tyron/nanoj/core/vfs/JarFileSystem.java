@@ -10,7 +10,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -109,7 +108,7 @@ public final class JarFileSystem implements FileSystem {
     }
 
     private JarIndex buildIndex(URI jarUri) {
-        FileObject jarFo = VirtualFileSystem.getInstance().find(jarUri);
+        FileObject jarFo = VirtualFileManager.getInstance().find(jarUri);
 
         // Fast path: real file on disk.
         if ("file".equalsIgnoreCase(jarUri.getScheme())) {

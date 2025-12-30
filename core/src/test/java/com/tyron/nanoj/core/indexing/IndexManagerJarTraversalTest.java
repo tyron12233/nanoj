@@ -3,6 +3,7 @@ package com.tyron.nanoj.core.indexing;
 import com.tyron.nanoj.api.vfs.FileObject;
 import com.tyron.nanoj.core.indexing.spi.IndexDefinition;
 import com.tyron.nanoj.core.test.MockFileObject;
+import com.tyron.nanoj.core.vfs.VirtualFileManager;
 import com.tyron.nanoj.testFramework.BaseIdeTest;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -52,7 +53,7 @@ public class IndexManagerJarTraversalTest extends BaseIdeTest {
 
         // Sanity: jar root itself should also be resolvable.
         URI jarRootUri = URI.create("jar:" + jarFo.toUri() + "!/");
-        FileObject jarRoot = com.tyron.nanoj.core.vfs.VirtualFileSystem.getInstance().find(jarRootUri);
+        FileObject jarRoot = VirtualFileManager.getInstance().find(jarRootUri);
         Assertions.assertTrue(jarRoot.isFolder());
     }
 

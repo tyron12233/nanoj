@@ -2,11 +2,10 @@ package com.tyron.nanoj.core.project;
 
 import com.tyron.nanoj.api.tasks.ProjectRegistry;
 import com.tyron.nanoj.core.test.MockProject;
-import com.tyron.nanoj.core.vfs.VirtualFileSystem;
+import com.tyron.nanoj.core.vfs.VirtualFileManager;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -27,7 +26,7 @@ public class ProjectConfigLifecycleListenerTest {
                     path: core
                 """, StandardCharsets.UTF_8);
 
-        var rootFo = VirtualFileSystem.getInstance().find(root.toFile());
+        var rootFo = VirtualFileManager.getInstance().find(root.toFile());
         MockProject project = new MockProject(cache.toFile(), rootFo);
 
         ProjectConfigLifecycleListener l = new ProjectConfigLifecycleListener(project);

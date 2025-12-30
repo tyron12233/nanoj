@@ -29,7 +29,7 @@ public class JarFileSystemTest extends BaseIdeTest {
         project.addLibrary(jarFo);
 
         URI jarRootUri = URI.create("jar:" + jarFo.toUri() + "!/");
-        FileObject jarRoot = VirtualFileSystem.getInstance().find(jarRootUri);
+        FileObject jarRoot = VirtualFileManager.getInstance().find(jarRootUri);
 
         Assertions.assertTrue(jarRoot.exists());
         Assertions.assertTrue(jarRoot.isFolder());

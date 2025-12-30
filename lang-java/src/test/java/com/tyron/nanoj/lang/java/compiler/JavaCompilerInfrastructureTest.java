@@ -10,7 +10,7 @@ import com.tyron.nanoj.core.service.ProjectServiceManager;
 import com.tyron.nanoj.core.test.MockFileObject;
 import com.tyron.nanoj.core.test.MockFileSystem;
 import com.tyron.nanoj.core.test.MockProject;
-import com.tyron.nanoj.core.vfs.VirtualFileSystem;
+import com.tyron.nanoj.core.vfs.VirtualFileManager;
 import com.tyron.nanoj.lang.java.indexing.JavaBinaryStubIndexer;
 import com.tyron.nanoj.lang.java.indexing.JavaPackageIndex;
 import com.tyron.nanoj.lang.java.indexing.JavaSuperTypeIndex;
@@ -56,7 +56,7 @@ public class JavaCompilerInfrastructureTest {
         );
 
         mockFileSystem = new MockFileSystem();
-        VirtualFileSystem.getInstance().register(mockFileSystem);
+        VirtualFileManager.getInstance().register(mockFileSystem);
 
         ProjectServiceManager.registerInstance(project, ParsingManager.class, new ParsingManager(project));
 

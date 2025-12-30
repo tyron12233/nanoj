@@ -6,7 +6,7 @@ import com.tyron.nanoj.core.service.ProjectServiceManager;
 import com.tyron.nanoj.core.test.MockFileObject;
 import com.tyron.nanoj.core.test.MockProject;
 import com.tyron.nanoj.core.vfs.JrtFileSystem;
-import com.tyron.nanoj.core.vfs.VirtualFileSystem;
+import com.tyron.nanoj.core.vfs.VirtualFileManager;
 import com.tyron.nanoj.core.indexing.spi.IndexDefinition;
 import com.tyron.nanoj.testFramework.BaseIdeTest;
 import org.junit.jupiter.api.Assumptions;
@@ -15,14 +15,11 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.net.URI;
-import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.Deque;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -123,7 +120,7 @@ public class JrtIndexBenchmarkTest extends BaseIdeTest {
             if (root == null || root.trim().isEmpty()) continue;
 
             try {
-                FileObject pkgRoot = VirtualFileSystem.getInstance().find(URI.create(root.trim()));
+                FileObject pkgRoot = VirtualFileManager.getInstance().find(URI.create(root.trim()));
                 remaining = collectClassFilesBfs(pkgRoot, remaining, out);
             } catch (Throwable t) {
                 System.out.println("Skipping root (unavailable): " + root + " -> " + t.getClass().getSimpleName());

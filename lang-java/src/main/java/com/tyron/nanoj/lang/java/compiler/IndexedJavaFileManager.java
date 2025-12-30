@@ -2,7 +2,7 @@ package com.tyron.nanoj.lang.java.compiler;
 
 import com.tyron.nanoj.api.project.Project;
 import com.tyron.nanoj.api.vfs.FileObject;
-import com.tyron.nanoj.core.vfs.VirtualFileSystem;
+import com.tyron.nanoj.core.vfs.VirtualFileManager;
 import com.tyron.nanoj.core.indexing.IndexManager;
 import com.tyron.nanoj.core.indexing.SearchScope;
 import com.tyron.nanoj.core.indexing.Scopes;
@@ -39,10 +39,10 @@ public class IndexedJavaFileManager extends ForwardingJavaFileManager<StandardJa
 
         // VirtualFileSystem.find(String) only detects "://" URIs; NanoJ also uses schemes like "jrt:/".
         if (pathOrUri.startsWith("jrt:") || pathOrUri.startsWith("jar:") || pathOrUri.startsWith("file:")) {
-            return VirtualFileSystem.getInstance().find(URI.create(pathOrUri));
+            return VirtualFileManager.getInstance().find(URI.create(pathOrUri));
         }
 
-        return VirtualFileSystem.getInstance().find(new File(pathOrUri));
+        return VirtualFileManager.getInstance().find(new File(pathOrUri));
     }
 
     private static boolean isPathCompatibleWithKind(String pathOrUri, JavaFileObject.Kind kind, String requestedClassName) {

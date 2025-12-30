@@ -10,7 +10,7 @@ import com.tyron.nanoj.api.tasks.TaskResult;
 import com.tyron.nanoj.api.tasks.TasksService;
 import com.tyron.nanoj.api.vfs.FileObject;
 import com.tyron.nanoj.core.indexing.IndexManager;
-import com.tyron.nanoj.core.vfs.VirtualFileSystem;
+import com.tyron.nanoj.core.vfs.VirtualFileManager;
 import com.tyron.nanoj.desktop.NanojCompletionPopup;
 import com.tyron.nanoj.desktop.diagnostics.NanojDiagnosticsParser;
 
@@ -237,7 +237,7 @@ public final class DesktopIdeFrame {
                 if (!(uo instanceof File f)) return;
                 if (f.isDirectory()) return;
 
-                FileObject fo = VirtualFileSystem.getInstance().find(f);
+                FileObject fo = VirtualFileManager.getInstance().find(f);
                 if (fo == null) return;
                 try {
                     tabs.openFile(fo);

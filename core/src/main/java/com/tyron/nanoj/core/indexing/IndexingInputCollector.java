@@ -2,7 +2,7 @@ package com.tyron.nanoj.core.indexing;
 
 import com.tyron.nanoj.api.project.Project;
 import com.tyron.nanoj.api.vfs.FileObject;
-import com.tyron.nanoj.core.vfs.VirtualFileSystem;
+import com.tyron.nanoj.core.vfs.VirtualFileManager;
 
 import java.io.File;
 import java.net.URI;
@@ -94,7 +94,7 @@ public final class IndexingInputCollector {
 
         // Optional: JRT modules root (desktop JDKs). IndexManager understands jrt:/ folder traversal.
         try {
-            FileObject modulesRoot = VirtualFileSystem.getInstance().find(URI.create("jrt:/modules"));
+            FileObject modulesRoot = VirtualFileManager.getInstance().find(URI.create("jrt:/modules"));
             if (modulesRoot != null && modulesRoot.exists() && modulesRoot.isFolder()) {
                 out.add(modulesRoot);
             }
@@ -117,9 +117,9 @@ public final class IndexingInputCollector {
                 return null;
             }
             if (path.startsWith("jrt:/") || path.startsWith("jar:") || path.contains("://")) {
-                return VirtualFileSystem.getInstance().find(URI.create(path));
+                return VirtualFileManager.getInstance().find(URI.create(path));
             }
-            return VirtualFileSystem.getInstance().find(new File(path));
+            return VirtualFileManager.getInstance().find(new File(path));
         } catch (Throwable ignored) {
             return null;
         }

@@ -16,7 +16,7 @@ public class JrtFileSystemTest extends BaseIdeTest {
         // JDK8 doesn't have jrt:.
         Assumptions.assumeTrue(isJrtAvailable());
 
-        FileObject stringClass = VirtualFileSystem.getInstance()
+        FileObject stringClass = VirtualFileManager.getInstance()
                 .find(URI.create("jrt:/modules/java.base/java/lang/String.class"));
 
         assertTrue(stringClass.exists());

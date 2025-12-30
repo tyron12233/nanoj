@@ -10,13 +10,9 @@ import com.tyron.nanoj.api.language.LanguageSupport;
 import com.tyron.nanoj.api.vfs.FileObject;
 import com.tyron.nanoj.core.editor.EditorManagerImpl;
 import com.tyron.nanoj.core.service.ProjectServiceManager;
-import com.tyron.nanoj.core.vfs.VirtualFileSystem;
 import com.tyron.nanoj.testFramework.BaseCompletionTest;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
-import java.nio.file.Files;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;

@@ -12,7 +12,7 @@ This module provides a minimal **Virtual File System** abstraction around storag
   - A backend implementation (e.g. local disk, in-memory).
   - Identified by a URI scheme (e.g. `file`).
 
-- `com.tyron.nanoj.core.vfs.VirtualFileSystem`
+- `com.tyron.nanoj.core.vfs.VirtualFileManager`
   - Global registry + dispatcher.
   - Maps URI schemes to `FileSystem`s.
   - Propagates file events to **global listeners**.
