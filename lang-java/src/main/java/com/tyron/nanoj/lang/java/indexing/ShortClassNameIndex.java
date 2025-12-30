@@ -16,7 +16,7 @@ import com.tyron.nanoj.core.indexing.spi.IndexDefinition;
 import com.tyron.nanoj.core.service.ProjectServiceManager;
 
 import java.io.IOException;
-import java.io.InputStream;
+import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -35,7 +35,7 @@ import java.util.Map;
 public class ShortClassNameIndex implements IndexDefinition<String, String> {
 
     public static final String ID = "java_short_names";
-    private static final int VERSION = 1;
+    private static final int VERSION = 2;
 
     private final ParserFactory parserFactory;
 
@@ -99,6 +99,7 @@ public class ShortClassNameIndex implements IndexDefinition<String, String> {
         private final Map<String, String> results;
         private String packageName = "";
         private final Deque<String> classStack = new ArrayDeque<>();
+        private final Deque<Boolean> publicStack = new ArrayDeque<>();
 
         SourceVisitor(Map<String, String> results) {
             this.results = results;
@@ -117,17 +118,29 @@ public class ShortClassNameIndex implements IndexDefinition<String, String> {
             String simpleName = node.getSimpleName().toString();
             if (simpleName.isEmpty()) return super.visitClass(node, unused);
 
+            boolean isPublic = node.getModifiers() != null
+                    && node.getModifiers().getFlags().contains(javax.lang.model.element.Modifier.PUBLIC);
+
+            // Only index classes that are publicly visible from outside their file/package.
+            // For nested classes, all enclosing classes must also be public.
+            boolean enclosingPublic = publicStack.isEmpty() || Boolean.TRUE.equals(publicStack.peekLast());
+            boolean shouldIndex = isPublic && enclosingPublic;
+
             StringBuilder fqn = new StringBuilder();
             if (!packageName.isEmpty()) fqn.append(packageName).append('.');
 
             for (String parent : classStack) fqn.append(parent).append('.');
             fqn.append(simpleName);
 
-            // Index: SimpleName -> FQN
-            results.put(simpleName, fqn.toString());
+            if (shouldIndex) {
+                // Index: SimpleName -> FQN
+                results.put(simpleName, fqn.toString());
+            }
 
             classStack.addLast(simpleName);
+            publicStack.addLast(isPublic);
             super.visitClass(node, unused);
+            publicStack.removeLast();
             classStack.removeLast();
             return null;
         }
@@ -137,6 +150,11 @@ public class ShortClassNameIndex implements IndexDefinition<String, String> {
         Map<String, String> results = new HashMap<>();
         try {
             ClassFile cf = SharedClassFile.get(file, helper);
+
+            // Only index publicly visible classes.
+            if (!cf.access_flags.is(Modifier.PUBLIC)) {
+                return results;
+            }
 
             // raw name: java/util/Map$Entry
             String binaryName = cf.getName();

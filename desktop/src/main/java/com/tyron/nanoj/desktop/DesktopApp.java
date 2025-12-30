@@ -14,6 +14,7 @@ import com.tyron.nanoj.core.vfs.VirtualFileSystem;
 import com.tyron.nanoj.lang.java.JavaLanguageSupport;
 import com.tyron.nanoj.lang.java.compiler.JavacFileManagerService;
 import com.tyron.nanoj.lang.java.indexing.JavaBinaryStubIndexer;
+import com.tyron.nanoj.lang.java.indexing.JavaFullClassNameIndex;
 import com.tyron.nanoj.lang.java.indexing.JavaPackageIndex;
 import com.tyron.nanoj.lang.java.indexing.ShortClassNameIndex;
 import com.tyron.nanoj.lang.java.indexing.JavaSuperTypeIndex;
@@ -119,6 +120,7 @@ public final class DesktopApp {
         IndexManager indexManager = IndexManager.getInstance(project);
         indexManager.register(new JavaBinaryStubIndexer(project));
         indexManager.register(new ShortClassNameIndex(project));
+        indexManager.register(new JavaFullClassNameIndex(project));
         indexManager.register(new JavaPackageIndex(project));
         indexManager.register(new JavaSuperTypeIndex(project));
 

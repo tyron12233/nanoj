@@ -80,6 +80,7 @@ public class JrtIndexBenchmarkTest extends BaseIdeTest {
         List<IndexDefinition<?, ?>> indexers = Arrays.asList(
                 new JavaBinaryStubIndexer(project),
                 new ShortClassNameIndex(project),
+            new JavaFullClassNameIndex(project),
                 new JavaPackageIndex(project)
         );
 

@@ -4,6 +4,7 @@ import com.sun.tools.javac.api.JavacTool;
 import com.sun.tools.javac.util.Context;
 import com.tyron.nanoj.core.indexing.IndexManager;
 import com.tyron.nanoj.lang.java.indexing.JavaBinaryStubIndexer;
+import com.tyron.nanoj.lang.java.indexing.JavaFullClassNameIndex;
 import com.tyron.nanoj.lang.java.indexing.JavaPackageIndex;
 import com.tyron.nanoj.core.test.MockFileObject;
 import com.tyron.nanoj.lang.java.indexing.JavaSuperTypeIndex;
@@ -25,6 +26,7 @@ public class CompilerIntegrationTest extends BaseIdeTest {
 
         indexManager.register(new JavaBinaryStubIndexer(project));
         indexManager.register(new ShortClassNameIndex(project));
+        indexManager.register(new JavaFullClassNameIndex(project));
         indexManager.register(new JavaPackageIndex(project));
         indexManager.register(new JavaSuperTypeIndex(project));
     }

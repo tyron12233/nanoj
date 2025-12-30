@@ -6,6 +6,7 @@ import com.tyron.nanoj.core.vfs.VirtualFileSystem;
 import com.tyron.nanoj.core.indexing.IndexManager;
 import com.tyron.nanoj.core.indexing.SearchScope;
 import com.tyron.nanoj.core.indexing.Scopes;
+import com.tyron.nanoj.lang.java.indexing.JavaFullClassNameIndex;
 import com.tyron.nanoj.lang.java.indexing.JavaPackageIndex;
 
 import javax.tools.*;
@@ -29,6 +30,37 @@ public class IndexedJavaFileManager extends ForwardingJavaFileManager<StandardJa
         this.indexManager = IndexManager.getInstance(project);
         this.sourceScope = Scopes.projectSource(project);
         this.libScope = Scopes.libraries(project);
+    }
+
+    private static FileObject findFileObject(String pathOrUri) {
+        if (pathOrUri == null || pathOrUri.isBlank()) {
+            return null;
+        }
+
+        // VirtualFileSystem.find(String) only detects "://" URIs; NanoJ also uses schemes like "jrt:/".
+        if (pathOrUri.startsWith("jrt:") || pathOrUri.startsWith("jar:") || pathOrUri.startsWith("file:")) {
+            return VirtualFileSystem.getInstance().find(URI.create(pathOrUri));
+        }
+
+        return VirtualFileSystem.getInstance().find(new File(pathOrUri));
+    }
+
+    private static boolean isPathCompatibleWithKind(String pathOrUri, JavaFileObject.Kind kind, String requestedClassName) {
+        if (pathOrUri == null || kind == null) {
+            return false;
+        }
+
+        String simpleName = requestedClassName;
+        int lastDot = requestedClassName == null ? -1 : requestedClassName.lastIndexOf('.');
+        if (lastDot != -1) {
+            simpleName = requestedClassName.substring(lastDot + 1);
+        }
+
+        return switch (kind) {
+            case SOURCE -> pathOrUri.endsWith("/" + simpleName + ".java") || pathOrUri.endsWith(simpleName + ".java");
+            case CLASS -> pathOrUri.endsWith("/" + simpleName + ".class") || pathOrUri.endsWith(simpleName + ".class");
+            default -> false;
+        };
     }
 
 
@@ -57,7 +89,7 @@ public class IndexedJavaFileManager extends ForwardingJavaFileManager<StandardJa
                     if (kinds.contains(idxEntry.kind)) {
                         String path = indexManager.getFilePath(fileId);
                         if (path != null) {
-                            FileObject fo = VirtualFileSystem.getInstance().find(new File(path));
+                            FileObject fo = findFileObject(path);
                             if (fo != null) {
                                 // CONSTRUCT BINARY NAME: package + . + simpleName
                                 String binaryName = packageName.isEmpty()
@@ -84,6 +116,34 @@ public class IndexedJavaFileManager extends ForwardingJavaFileManager<StandardJa
         SearchScope scope = determineScope(location);
         if (scope == null) {
             return super.getJavaFileForInput(location, className, kind);
+        }
+
+        if (className == null || className.isBlank()) {
+            return super.getJavaFileForInput(location, className, kind);
+        }
+
+        // Fast-path: resolve exact FQN -> file via index.
+        // This is especially useful for CLASS_PATH where scanning classpath roots is expensive.
+        final JavaFileObject[] found = new JavaFileObject[1];
+        indexManager.processValues(JavaFullClassNameIndex.ID, className, scope, (fileId, pathOrUri) -> {
+            if (!(pathOrUri instanceof String p)) {
+                return true;
+            }
+            if (!isPathCompatibleWithKind(p, kind, className)) {
+                return true;
+            }
+
+            FileObject fo = findFileObject(p);
+            if (fo == null) {
+                return true;
+            }
+
+            found[0] = new IndexedJavaFileObject(fo, kind, className);
+            return false;
+        });
+
+        if (found[0] != null) {
+            return found[0];
         }
 
         // we can try to use our Index to find the file path quickly

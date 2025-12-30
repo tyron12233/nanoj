@@ -24,13 +24,15 @@ public class ShortClassNameIndexTest extends BaseJavaIndexingTest {
         MockFileObject file = file("src/com/foo/Bar.java",
                 "package com.foo; \n" +
                         "public class Bar { \n" +
-                        "   class Inner {} \n" +
+                "   public class Inner {} \n" +
+                "   class Hidden {} \n" +
                         "}");
 
         Map<String, String> map = indexer.map(file, null);
 
         Assertions.assertEquals("com.foo.Bar", map.get("Bar"));
         Assertions.assertEquals("com.foo.Bar.Inner", map.get("Inner"));
+        Assertions.assertFalse(map.containsKey("Hidden"));
     }
 
     @Test
@@ -41,5 +43,15 @@ public class ShortClassNameIndexTest extends BaseJavaIndexingTest {
 
         Map<String, String> map = indexer.map(file, null);
         Assertions.assertEquals("com.example.Demo", map.get("Demo"));
+    }
+
+    @Test
+    public void testSkipsNonPublicBinaryClass() {
+        byte[] bytes = compile("com.example.Hidden", "package com.example; class Hidden {}");
+
+        MockFileObject file = createClassFile("com.example.Hidden", bytes);
+
+        Map<String, String> map = indexer.map(file, null);
+        Assertions.assertTrue(map.isEmpty());
     }
 }

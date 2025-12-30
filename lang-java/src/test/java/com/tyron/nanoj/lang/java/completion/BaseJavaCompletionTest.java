@@ -15,6 +15,7 @@ import com.tyron.nanoj.core.vfs.VirtualFileSystem;
 import com.tyron.nanoj.lang.java.JavaLanguageSupport;
 import com.tyron.nanoj.lang.java.compiler.JavacFileManagerService;
 import com.tyron.nanoj.lang.java.indexing.JavaBinaryStubIndexer;
+import com.tyron.nanoj.lang.java.indexing.JavaFullClassNameIndex;
 import com.tyron.nanoj.lang.java.indexing.JavaPackageIndex;
 import com.tyron.nanoj.lang.java.indexing.ShortClassNameIndex;
 import com.tyron.nanoj.lang.java.indexing.JavaSuperTypeIndex;
@@ -89,6 +90,7 @@ public abstract class BaseJavaCompletionTest extends BaseCompletionTest {
         List<IndexDefinition<?, ?>> javaDefs = List.of(
                 new JavaBinaryStubIndexer(project),
                 new ShortClassNameIndex(project),
+                new JavaFullClassNameIndex(project),
                 new JavaPackageIndex(project),
             new JavaSuperTypeIndex(project)
         );
