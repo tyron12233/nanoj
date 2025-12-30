@@ -17,6 +17,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    env:
+      JRT_MAX_CLASSES: "30000"
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,7 +35,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .nanoj/shared-indexes
-          key: nanoj-shared-indexes-${{ runner.os }}-jdk17-max2000-v1
+          key: nanoj-shared-indexes-${{ runner.os }}-jdk17-max${{ env.JRT_MAX_CLASSES }}-v1
 
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
@@ -45,7 +48,7 @@ jobs:
             -Dnanoj.test.useSharedIndexes=true \
             -Dnanoj.test.buildSharedIndexes=true \
             -Dnanoj.test.sharedIndexDir=.nanoj/shared-indexes \
-            -Dnanoj.test.jrt.maxClasses=30000
+            -Dnanoj.test.jrt.maxClasses=${{ env.JRT_MAX_CLASSES }}
 
       - name: Publish test report (GitHub Checks)
         if: always()
@@ -54,6 +57,7 @@ jobs:
           name: Gradle Tests
           path: "**/build/test-results/test/*.xml"
           reporter: java-junit
+          fail-on-error: "false"
 
       - name: Test summary (Markdown)
         if: always()
