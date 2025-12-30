@@ -1,6 +1,8 @@
 package com.tyron.nanoj.core.completion;
 
 import com.tyron.nanoj.api.completion.*;
+import com.tyron.nanoj.api.concurrent.TaskContext;
+import com.tyron.nanoj.api.concurrent.TaskContexts;
 import com.tyron.nanoj.api.dumb.DumbAware;
 import com.tyron.nanoj.api.dumb.DumbService;
 import com.tyron.nanoj.api.language.LanguageSupport;
@@ -15,17 +17,17 @@ import java.util.Objects;
 
 /**
  * Core implementation of {@link CodeCompletionService}.
- * <p>
+ *
  * Uses {@link LanguageSupport} to create a {@link CompletionProvider} per file.
  * Reads the current text from the caller (typically from an in-memory {@link com.tyron.nanoj.api.editor.Document}).
- * <p>
+ * 
  * <b>Thread Safety:</b> This service is thread-safe. It coordinates with:
  * - IndexManager (protected by ReadWriteLock for concurrent reads during indexing)
  * - FileDocumentManager (thread-safe document access)
  * - Document text (synchronized StringBuilder updates)
  * Concurrent calls to getCompletions() from multiple threads are safe and will not corrupt state.
  */
-public final class CodeCompletionServiceImpl implements CodeCompletionService {
+public final class CodeCompletionServiceImpl implements CodeCompletionService, DumbAware {
 
     public static CodeCompletionServiceImpl getInstance(Project project) {
         return ProjectServiceManager.getService(project, CodeCompletionServiceImpl.class);
@@ -42,7 +44,12 @@ public final class CodeCompletionServiceImpl implements CodeCompletionService {
         Objects.requireNonNull(file, "file");
         Objects.requireNonNull(text, "text");
 
-        // ensure providers see unsaved text when they choose to read from FileObject.
+        TaskContext taskContext = TaskContexts.currentOrNull();
+        if (taskContext != null) {
+            taskContext.cancellation().throwIfCancelled();
+        }
+
+        // Ensure providers see unsaved text when they choose to read from FileObject.
         FileObject inMemoryView = FileDocumentManagerImpl.getInstance(project).getInMemoryView(file);
 
         CompletionProvider provider = findLanguageSupport(inMemoryView).createCompletionProvider(project, inMemoryView);
@@ -52,10 +59,14 @@ public final class CodeCompletionServiceImpl implements CodeCompletionService {
             return List.of();
         }
 
-        // prefix matching: simplest default is "" (providers can narrow themselves via ResultSet withPrefixMatcher).
+        // Prefix matching: simplest default is "" (providers can narrow themselves via ResultSet withPrefixMatcher).
         CompletionResultSetImpl resultSet = new CompletionResultSetImpl(new PrefixMatcher.Plain(""), provider);
         CompletionParameters parameters = new CompletionParameters(project, inMemoryView, text, offset);
         provider.addCompletions(parameters, resultSet);
+
+        if (taskContext != null) {
+            taskContext.cancellation().throwIfCancelled();
+        }
 
         return LookupElementSorting.sort(project, parameters, new ArrayList<>(resultSet.getResultList()));
     }

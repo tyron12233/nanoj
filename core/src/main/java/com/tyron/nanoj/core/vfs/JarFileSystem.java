@@ -85,7 +85,7 @@ public final class JarFileSystem implements FileSystem {
 
     @Override
     public void refresh(boolean asynchronous) {
-        // no-op
+        indexCache.clear();
     }
 
     @Override

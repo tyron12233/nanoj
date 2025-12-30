@@ -91,6 +91,19 @@ public class VirtualFileSystem {
     }
 
     /**
+     * Requests all registered file systems to refresh their internal caches/views.
+     */
+    public void refreshAll(boolean asynchronous) {
+        for (FileSystem fs : registry.values()) {
+            try {
+                fs.refresh(asynchronous);
+            } catch (Throwable ignored) {
+                // Best-effort.
+            }
+        }
+    }
+
+    /**
      * Entry point to convert Java IO File to VFS FileObject.
      */
     public FileObject find(File file) {

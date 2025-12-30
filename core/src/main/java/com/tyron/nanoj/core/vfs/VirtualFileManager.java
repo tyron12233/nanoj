@@ -46,6 +46,10 @@ public final class VirtualFileManager {
         return delegate.getRegisteredSchemes();
     }
 
+    public void refreshAll(boolean asynchronous) {
+        delegate.refreshAll(asynchronous);
+    }
+
     public FileObject find(File file) {
         return delegate.find(file);
     }
