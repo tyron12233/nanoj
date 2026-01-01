@@ -1,8 +1,9 @@
 package com.tyron.nanoj.testFramework;
 
 import com.tyron.nanoj.api.concurrent.TaskScheduler;
+import com.tyron.nanoj.api.indexing.IndexManager;
 import com.tyron.nanoj.core.concurrent.TaskSchedulerImpl;
-import com.tyron.nanoj.core.indexing.IndexManager;
+import com.tyron.nanoj.core.indexing.IndexManagerImpl;
 import com.tyron.nanoj.core.service.ApplicationServiceManager;
 import com.tyron.nanoj.core.service.ProjectServiceManager;
 import com.tyron.nanoj.core.test.MockFileObject;
@@ -53,11 +54,10 @@ public abstract class BaseIdeTest {
         MockFileObject rootFo = new MockFileObject(projectRoot.getAbsolutePath(), "");
         project = new MockProject(cache, rootFo);
 
+        registerApplicationServices();
         registerProjectServices();
 
         beforeEach();
-
-        IndexManager.getInstance(project).onProjectOpened();
     }
 
     @AfterEach
@@ -71,6 +71,10 @@ public abstract class BaseIdeTest {
             }
             ApplicationServiceManager.disposeApplication();
         }
+    }
+
+    protected void registerApplicationServices() {
+        ApplicationServiceManager.registerBindingIfAbsent(IndexManager.class, IndexManagerImpl.class);
     }
 
     protected void registerProjectServices() {

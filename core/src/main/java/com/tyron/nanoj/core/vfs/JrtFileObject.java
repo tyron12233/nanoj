@@ -222,4 +222,9 @@ final class JrtFileObject implements FileObject {
     public void refresh() {
         // No-op
     }
+
+    @Override
+    public String toString() {
+        return path.toString();
+    }
 }

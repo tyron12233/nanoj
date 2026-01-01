@@ -5,6 +5,7 @@ import com.tyron.nanoj.api.project.Project;
 import com.tyron.nanoj.api.vfs.FileObject;
 import com.tyron.nanoj.api.vfs.VirtualFileManager;
 
+import java.net.URI;
 import java.util.function.Consumer;
 
 public class JdkRootsIterator implements IndexableFilesIterator {
@@ -23,7 +24,7 @@ public class JdkRootsIterator implements IndexableFilesIterator {
     @Override
     public void iterateRoots(Consumer<FileObject> consumer) {
         consumer.accept(
-                VirtualFileManager.getInstance().find("jrt://modules")
+                VirtualFileManager.getInstance().find(URI.create("jrt:/modules"))
         );
     }
 }

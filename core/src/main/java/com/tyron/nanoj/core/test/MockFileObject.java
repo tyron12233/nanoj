@@ -2,6 +2,9 @@ package com.tyron.nanoj.core.test;
 
 import com.tyron.nanoj.api.vfs.FileObject;
 import com.tyron.nanoj.api.vfs.FileObjectWithId;
+import com.tyron.nanoj.api.vfs.VirtualFileManager;
+import com.tyron.nanoj.core.vfs.VirtualFileManagerImpl;
+
 import java.io.*;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -15,6 +18,8 @@ public class MockFileObject implements FileObject {
 
     private boolean isFolder;
 
+    private long lastModified;
+
 
     public MockFileObject(String path, byte[] content) {
         this.path = path;
@@ -27,29 +32,77 @@ public class MockFileObject implements FileObject {
         this.path = path;
         this.content = content;
         this.name = new File(path).getName();
+
+        this.lastModified = System.currentTimeMillis();
     }
 
-    public void setContent(String content) { this.content = content; }
+    public void setContent(String content) {
+        this.content = content;
+        this.lastModified = System.currentTimeMillis();
+    }
 
-    @Override public String getName() { return name; }
-    @Override public String getExtension() { return name.contains(".") ? name.substring(name.lastIndexOf(".") + 1) : ""; }
-    @Override public String getPath() { return path; }
-    @Override public URI toUri() { return new File(path).toURI(); }
-    @Override public FileObject getParent() { return null; }
-    @Override public List<FileObject> getChildren() { return Collections.emptyList(); }
-    @Override public FileObject getChild(String name) { return null; }
-    @Override public boolean exists() { return true; }
-    @Override public boolean isFolder() { return isFolder; }
+    @Override
+    public String getName() {
+        return name;
+    }
+
+    @Override
+    public String getExtension() {
+        return name.contains(".") ? name.substring(name.lastIndexOf(".") + 1) : "";
+    }
+
+    @Override
+    public String getPath() {
+        return path;
+    }
+
+    @Override
+    public URI toUri() {
+        return new File(path).toURI();
+    }
+
+    @Override
+    public FileObject getParent() {
+        return null;
+    }
+
+    @Override
+    public List<FileObject> getChildren() {
+        return Collections.emptyList();
+    }
+
+    @Override
+    public FileObject getChild(String name) {
+        return null;
+    }
+
+    @Override
+    public boolean exists() {
+        return true;
+    }
+
+    @Override
+    public boolean isFolder() {
+        return isFolder;
+    }
 
     public void setFolder(boolean folder) {
         isFolder = folder;
     }
 
-    @Override public boolean isReadOnly() { return false; }
-    @Override public long lastModified() { return System.currentTimeMillis(); }
+    @Override
+    public boolean isReadOnly() {
+        return false;
+    }
+
+    @Override
+    public long lastModified() {
+        return lastModified;
+    }
 
     public void setByteContent(byte[] content) {
         this.byteContent = content;
+        this.lastModified = System.currentTimeMillis();
     }
 
     @Override
@@ -64,10 +117,33 @@ public class MockFileObject implements FileObject {
         return content != null ? content.length() : 0;
     }
 
-    @Override public OutputStream getOutputStream() { throw new UnsupportedOperationException(); }
-    @Override public FileObject createFile(String name) { throw new UnsupportedOperationException(); }
-    @Override public FileObject createFolder(String name) { throw new UnsupportedOperationException(); }
-    @Override public void delete() {}
-    @Override public void rename(String newName) {}
-    @Override public void refresh() {}
+    @Override
+    public OutputStream getOutputStream() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public FileObject createFile(String name) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public FileObject createFolder(String name) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void delete() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void rename(String newName) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void refresh() {
+        throw new UnsupportedOperationException();
+    }
 }

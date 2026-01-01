@@ -12,7 +12,7 @@ import com.sun.tools.javac.tree.JCTree;
 import com.sun.tools.javac.util.Context;
 import com.tyron.nanoj.api.project.Project;
 import com.tyron.nanoj.api.vfs.FileObject;
-import com.tyron.nanoj.core.indexing.spi.IndexDefinition;
+import com.tyron.nanoj.api.indexing.IndexDefinition;
 import com.tyron.nanoj.core.service.ProjectServiceManager;
 
 import java.nio.charset.StandardCharsets;
@@ -47,7 +47,7 @@ public final class JavaFullClassNameIndex implements IndexDefinition<String, Str
     }
 
     @Override
-    public String getId() {
+    public String id() {
         return ID;
     }
 

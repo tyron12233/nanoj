@@ -1,7 +1,7 @@
 package com.tyron.nanoj.core.indexing;
 
 import com.tyron.nanoj.api.vfs.FileObject;
-import com.tyron.nanoj.core.indexing.spi.IndexDefinition;
+import com.tyron.nanoj.api.indexing.IndexDefinition;
 import org.mapdb.Atomic;
 import org.mapdb.DB;
 import org.mapdb.DBMaker;
@@ -21,7 +21,7 @@ import java.util.logging.Logger;
 /**
  * Builds a standalone MapDB index file that can be mounted read-only as a "shared index".
  *
- * The output file uses the same schema as {@link IndexManager}:
+ * The output file uses the same schema as {@link com.tyron.nanoj.api.indexing.IndexManager}:
  * - sys_path_to_id, sys_id_to_path, sys_seq_file_id
  * - {indexId}_inv and {indexId}_fwd maps for each IndexDefinition
  */
@@ -59,8 +59,8 @@ public final class SharedIndexBuilder {
             Map<String, MapDBIndexWrapper> wrappers = new HashMap<>();
             for (IndexDefinition<?, ?> def : definitions) {
                 if (def == null) continue;
-                defsById.put(def.getId(), def);
-                wrappers.put(def.getId(), new MapDBIndexWrapper(db, def.getId()));
+                defsById.put(def.id(), def);
+                wrappers.put(def.id(), new MapDBIndexWrapper(db, def.id()));
             }
 
             Map<String, LongAdder> keysByIndex = new ConcurrentHashMap<>();
@@ -83,9 +83,9 @@ public final class SharedIndexBuilder {
                     for (IndexDefinition<?, ?> def : defsById.values()) {
                         try {
                             if (!def.supports(file)) continue;
-                            int added = updateIndex(wrappers.get(def.getId()), def, file, fileId, helper);
+                            int added = updateIndex(wrappers.get(def.id()), def, file, fileId, helper);
                             if (added > 0) {
-                                keysByIndex.get(def.getId()).add(added);
+                                keysByIndex.get(def.id()).add(added);
                             }
                         } catch (Throwable ignored) {
                         }
@@ -175,15 +175,7 @@ public final class SharedIndexBuilder {
         for (Map.Entry<K, V> entry : newEntries.entrySet()) {
             String keyStr = entry.getKey().toString();
             byte[] valBytes = def.serializeValue(entry.getValue());
-
-            byte[] packet = new byte[4 + valBytes.length];
-            packet[0] = (byte) (fileId >> 24);
-            packet[1] = (byte) (fileId >> 16);
-            packet[2] = (byte) (fileId >> 8);
-            packet[3] = (byte) (fileId);
-            System.arraycopy(valBytes, 0, packet, 4, valBytes.length);
-
-            wrapper.putInverted(keyStr, packet);
+            wrapper.putInverted(keyStr, fileId, valBytes);
             newKeysForForward.add(keyStr);
             keysAdded++;
         }

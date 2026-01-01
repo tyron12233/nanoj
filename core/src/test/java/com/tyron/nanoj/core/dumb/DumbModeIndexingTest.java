@@ -3,7 +3,7 @@ package com.tyron.nanoj.core.dumb;
 import com.tyron.nanoj.api.dumb.DumbService;
 import com.tyron.nanoj.api.vfs.FileObject;
 import com.tyron.nanoj.core.indexing.IndexManager;
-import com.tyron.nanoj.core.indexing.spi.IndexDefinition;
+import com.tyron.nanoj.api.indexing.IndexDefinition;
 import com.tyron.nanoj.core.service.ProjectServiceManager;
 import com.tyron.nanoj.testFramework.BaseIdeTest;
 import org.junit.jupiter.api.Test;
@@ -66,7 +66,7 @@ public class DumbModeIndexingTest extends BaseIdeTest {
     private static final class QuickIndexDefinition implements IndexDefinition<String, String> {
 
         @Override
-        public String getId() {
+        public String id() {
             return "quick_test_index";
         }
 
@@ -121,7 +121,7 @@ public class DumbModeIndexingTest extends BaseIdeTest {
         }
 
         @Override
-        public String getId() {
+        public String id() {
             return "blocking_test_index";
         }
 

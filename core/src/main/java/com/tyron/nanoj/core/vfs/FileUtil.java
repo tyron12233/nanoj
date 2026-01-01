@@ -5,8 +5,9 @@ import com.tyron.nanoj.api.vfs.FileObject;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.ArrayDeque;
-import java.util.Deque;
+import java.nio.file.Files;
+import java.util.*;
+import java.util.stream.Stream;
 
 /**
  * High-level operations for the Virtual File System.
@@ -81,5 +82,40 @@ public class FileUtil {
             return filePath.substring(basePath.length());
         }
         return null; // Not a child
+    }
+
+    public static Stream<FileObject> childrenStream(FileObject dir) {
+        return new FileObjectTreeIterator(dir).stream();
+    }
+
+    public static List<FileObject> collectChildren(FileObject dir) {
+        if (!dir.isFolder()) {
+            return List.of();
+        }
+        Set<FileObject> visited = new HashSet<>();
+        Queue<FileObject> queue = new ArrayDeque<>();
+        List<FileObject> files = new LinkedList<>();
+
+        queue.add(dir);
+
+        while (!queue.isEmpty()) {
+            FileObject poll = queue.poll();
+            if (visited.contains(poll)) {
+                continue;
+            }
+
+            List<FileObject> children = poll.getChildren();
+            for (FileObject child : children) {
+                if (child.isFolder()) {
+                    queue.add(child);
+                } else {
+                    files.add(child);
+                }
+            }
+
+            visited.add(poll);
+        }
+
+        return files;
     }
 }

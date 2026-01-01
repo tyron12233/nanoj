@@ -1,7 +1,8 @@
 package com.tyron.nanoj.core.indexing;
 
 import com.tyron.nanoj.api.vfs.FileObject;
-import com.tyron.nanoj.core.indexing.spi.IndexDefinition;
+import com.tyron.nanoj.api.indexing.IndexDefinition;
+import com.tyron.nanoj.api.indexing.IndexManager;
 import com.tyron.nanoj.core.test.MockFileObject;
 import com.tyron.nanoj.api.vfs.VirtualFileManager;
 import com.tyron.nanoj.testFramework.BaseIdeTest;
@@ -15,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
@@ -24,7 +26,7 @@ public class IndexManagerJarTraversalTest extends BaseIdeTest {
 
     @Test
     public void updateFileAsyncOnJarTraversesAndIndexesChildren() throws Exception {
-        IndexManager manager = IndexManager.getInstance(project);
+        IndexManagerImpl manager = (IndexManagerImpl) IndexManager.getInstance();
         manager.register(new ClassNameIndex(manager));
 
         byte[] jarBytes = makeJar(
@@ -34,13 +36,14 @@ public class IndexManagerJarTraversalTest extends BaseIdeTest {
 
         String jarPath = project.getRootDirectory().getPath() + "/libs/test.jar";
         MockFileObject jarFo = new MockFileObject(jarPath, jarBytes);
+        jarFo.setFolder(true);
+
         testVfs.registerFile(jarFo);
         project.addLibrary(jarFo);
 
-        manager.updateFile(jarFo);
-
-        Future<?> f = manager.updateFileAsync(jarFo);
-        f.get(10, TimeUnit.SECONDS);
+        Future<?> f = CompletableFuture.runAsync(() -> manager.processRoots(List.of(jarFo)));
+        f.get();
+        manager.flush();
 
         // The traversal + batch indexing should have indexed jar entries.
         List<String> a = manager.search("class_name_index", "A.class");
@@ -65,7 +68,7 @@ public class IndexManagerJarTraversalTest extends BaseIdeTest {
         }
 
         @Override
-        public String getId() {
+        public String id() {
             return "class_name_index";
         }
 
@@ -88,7 +91,7 @@ public class IndexManagerJarTraversalTest extends BaseIdeTest {
 
         @Override
         public boolean isValueForFile(String value, int fileId) {
-            String pathForId = manager.getFilePath(fileId);
+            String pathForId = VirtualFileManager.getInstance().findById(fileId).getPath();
             return value != null && value.equals(pathForId);
         }
 

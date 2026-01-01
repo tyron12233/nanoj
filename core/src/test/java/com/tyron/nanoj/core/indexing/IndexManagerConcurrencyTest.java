@@ -1,13 +1,14 @@
 package com.tyron.nanoj.core.indexing;
 
-import com.tyron.nanoj.api.project.Project;
-import com.tyron.nanoj.core.indexing.spi.IndexDefinition;
+import com.tyron.nanoj.api.indexing.IndexDefinition;
 import com.tyron.nanoj.core.service.ProjectServiceManager;
 import com.tyron.nanoj.testFramework.BaseIdeTest;
+import com.tyron.nanoj.api.indexing.IndexManager;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -19,8 +20,7 @@ public class IndexManagerConcurrencyTest extends BaseIdeTest {
 
     @Test
     void concurrentUpdateAndReadDoesNotCorruptDb() throws Exception {
-        IndexManager indexManager = IndexManager.getInstance(project);
-        ProjectServiceManager.registerInstance(project, IndexManager.class, indexManager);
+        IndexManagerImpl indexManager = (IndexManagerImpl) IndexManager.getInstance();
 
         String indexId = "throwing_index";
         indexManager.register(new ThrowingIndex(indexId));
@@ -39,11 +39,11 @@ public class IndexManagerConcurrencyTest extends BaseIdeTest {
                     f.setContent((i % 2 == 0)
                             ? "package p; class Foo { void m(){ } }\n"
                             : "package p; class Foo { void m(){ BROKEN } }\n");
-                    indexManager.updateFile(f);
+                    indexManager.processBatch(List.of(f));
                 }
 
                 // Ensure all queued writes have finished so failures surface before the test ends.
-                indexManager.flush();
+                indexManager.finishIndexing();
             } catch (Throwable t) {
                 failure.set(t);
             } finally {
@@ -55,7 +55,7 @@ public class IndexManagerConcurrencyTest extends BaseIdeTest {
             try {
                 start.await();
                 for (int i = 0; i < 200; i++) {
-                    indexManager.processValues(indexId, "k", SearchScope.all(), (fileId, value) -> true);
+                    indexManager.processValues(indexId, "k", com.tyron.nanoj.api.indexing.SearchScope.all(), (fileId, value) -> true);
                 }
             } catch (Throwable t) {
                 failure.set(t);
@@ -83,7 +83,7 @@ public class IndexManagerConcurrencyTest extends BaseIdeTest {
         }
 
         @Override
-        public String getId() {
+        public String id() {
             return id;
         }
 

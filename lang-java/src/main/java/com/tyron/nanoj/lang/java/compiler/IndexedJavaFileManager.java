@@ -3,9 +3,9 @@ package com.tyron.nanoj.lang.java.compiler;
 import com.tyron.nanoj.api.project.Project;
 import com.tyron.nanoj.api.vfs.FileObject;
 import com.tyron.nanoj.api.vfs.VirtualFileManager;
-import com.tyron.nanoj.core.indexing.IndexManager;
-import com.tyron.nanoj.core.indexing.SearchScope;
-import com.tyron.nanoj.core.indexing.Scopes;
+import com.tyron.nanoj.api.indexing.IndexManager;
+import com.tyron.nanoj.api.indexing.SearchScope;
+import com.tyron.nanoj.api.indexing.Scopes;
 import com.tyron.nanoj.lang.java.indexing.JavaFullClassNameIndex;
 import com.tyron.nanoj.lang.java.indexing.JavaPackageIndex;
 
@@ -27,7 +27,7 @@ public class IndexedJavaFileManager extends ForwardingJavaFileManager<StandardJa
 
     public IndexedJavaFileManager(JavaFileManager delegate, Project project) {
         super((StandardJavaFileManager) delegate);
-        this.indexManager = IndexManager.getInstance(project);
+        this.indexManager = IndexManager.getInstance();
         this.sourceScope = Scopes.projectSource(project);
         this.libScope = Scopes.libraries(project);
     }
@@ -87,7 +87,7 @@ public class IndexedJavaFileManager extends ForwardingJavaFileManager<StandardJa
                     JavaPackageIndex.Entry idxEntry = (JavaPackageIndex.Entry) entry;
 
                     if (kinds.contains(idxEntry.kind)) {
-                        String path = indexManager.getFilePath(fileId);
+                        String path = VirtualFileManager.getInstance().findById(fileId).getPath();
                         if (path != null) {
                             FileObject fo = findFileObject(path);
                             if (fo != null) {

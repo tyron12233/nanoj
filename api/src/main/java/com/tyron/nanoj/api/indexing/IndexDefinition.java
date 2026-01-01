@@ -1,17 +1,11 @@
-package com.tyron.nanoj.core.indexing.spi;
+package com.tyron.nanoj.api.indexing;
 
 import com.tyron.nanoj.api.vfs.FileObject;
-import com.tyron.nanoj.core.indexing.IndexingStampStore;
 
 import java.util.Map;
 
 /**
  * Defines the logic for a specific type of index (e.g., Java Class Index, TODO Index).
- * <p>
- * This class is responsible for:
- * 1. Extracting data (Keys/Values) from a file.
- * 2. Serializing that data to bytes for the {@link com.tyron.nanoj.core.indexing.store.BucketedDiskStore}.
- * 3. Identifying which data belongs to which file for incremental updates.
  *
  * @param <K> Key type (e.g. String className, String methodSignature)
  * @param <V> Value type (e.g. ClassLocation, Integer offset). Must ensure it contains the FileID if strictly necessary for removal.
@@ -22,7 +16,7 @@ public interface IndexDefinition<K, V> {
      * @return A unique identifier for this index (e.g., "java_classes", "xml_ids").
      * Used for folder naming and registry lookups.
      */
-    String getId();
+    String id();
 
     /**
      * @return Version integer. Incrementing this should trigger a rebuild of this specific index.
@@ -32,9 +26,6 @@ public interface IndexDefinition<K, V> {
     /**
      * Returns true if this index should (re)index the given file.
      * <p>
-     * Default implementation uses {@link IndexingStampStore} and checks the file's
-     * {@code lastModified} + {@code length} stamp <b>per index ID</b>.
-     * <p>
      * Index implementations may override this to:
      * <ul>
      *   <li>use stronger staleness signals (content hash, PSI version, etc.)</li>
@@ -42,11 +33,8 @@ public interface IndexDefinition<K, V> {
      *   <li>skip indexing for known-uninteresting files even if they changed</li>
      * </ul>
      */
-    default boolean isOutdated(FileObject fileObject, IndexingStampStore stamps) {
-        if (fileObject == null || stamps == null) {
-            return true;
-        }
-        return !stamps.isUpToDate(getId(), getVersion(), fileObject);
+    default boolean isOutdated(FileObject fileObject) {
+        return false;
     }
 
     /**

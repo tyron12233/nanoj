@@ -4,7 +4,6 @@ import com.sun.source.tree.AssignmentTree;
 import com.sun.source.tree.ConditionalExpressionTree;
 import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.MethodInvocationTree;
-import com.sun.source.tree.NewClassTree;
 import com.sun.source.tree.ParenthesizedTree;
 import com.sun.source.tree.ReturnTree;
 import com.sun.source.tree.Tree;
@@ -16,8 +15,8 @@ import com.tyron.nanoj.api.completion.CompletionResultSet;
 import com.tyron.nanoj.api.completion.InsertionContext;
 import com.tyron.nanoj.api.completion.LookupElementBuilder;
 import com.tyron.nanoj.api.project.Project;
-import com.tyron.nanoj.core.indexing.IndexManager;
-import com.tyron.nanoj.core.indexing.Scopes;
+import com.tyron.nanoj.api.indexing.IndexManager;
+import com.tyron.nanoj.api.indexing.Scopes;
 import com.tyron.nanoj.lang.java.compiler.CompilationInfo;
 import com.tyron.nanoj.lang.java.indexing.ShortClassNameIndex;
 import com.tyron.nanoj.lang.java.indexing.JavaBinaryStubIndexer;
@@ -44,7 +43,7 @@ public class ClassNameCompletions {
             return;
         }
 
-        IndexManager indexManager = IndexManager.getInstance(project);
+        IndexManager indexManager = IndexManager.getInstance();
 
         // 1) Smart: `new <caret>` context. Suggest instantiable subtypes of the expected type.
         ExpectedNewContext expected = findExpectedNewContext(info, pathAtCursor);
@@ -301,7 +300,7 @@ public class ClassNameCompletions {
         }
 
         try {
-            IndexManager indexManager = IndexManager.getInstance(project);
+            IndexManager indexManager = IndexManager.getInstance();
             ClassStub stub = findStub(indexManager, fqn);
             if (stub == null || stub.methods == null || stub.methods.isEmpty()) {
                 return false;
@@ -333,7 +332,7 @@ public class ClassNameCompletions {
         }
 
         try {
-            IndexManager indexManager = IndexManager.getInstance(project);
+            IndexManager indexManager = IndexManager.getInstance();
             ClassStub stub = findStub(indexManager, fqn);
             if (stub == null) {
                 return false;

@@ -5,9 +5,9 @@ import com.tyron.nanoj.api.completion.LookupElement;
 import com.tyron.nanoj.api.completion.LookupElementPresentation;
 import com.tyron.nanoj.api.language.LanguageSupport;
 import com.tyron.nanoj.api.vfs.FileObject;
-import com.tyron.nanoj.core.indexing.IndexManager;
+import com.tyron.nanoj.api.indexing.IndexManager;
 import com.tyron.nanoj.core.indexing.SharedIndexBuilder;
-import com.tyron.nanoj.core.indexing.spi.IndexDefinition;
+import com.tyron.nanoj.api.indexing.IndexDefinition;
 import com.tyron.nanoj.core.service.ProjectServiceManager;
 import com.tyron.nanoj.api.vfs.VirtualFileManager;
 import com.tyron.nanoj.lang.java.JavaLanguageSupport;
@@ -94,23 +94,9 @@ public abstract class BaseJavaCompletionTest extends BaseCompletionTest {
 
         File sharedIndexFile = ensureSharedJdkIndex(javaDefs);
 
-        indexManager = IndexManager.getInstance(project);
+        indexManager = IndexManager.getInstance();
         for (IndexDefinition<?, ?> def : javaDefs) {
             indexManager.register(def);
-        }
-
-        boolean sharedMounted = sharedIndexFile != null && sharedIndexFile.isFile();
-        if (sharedMounted) {
-            if (LOG.isLoggable(Level.INFO)) {
-                LOG.info("sharedIndex action=mount file=" + sharedIndexFile);
-            }
-            indexManager.mountSharedIndex(sharedIndexFile);
-            indexManager.flush();
-        } else {
-            if (LOG.isLoggable(Level.INFO)) {
-                LOG.info("sharedIndex action=skip reason=missing; indexing=jrt(perTest)");
-            }
-            indexClasspath();
         }
 
 
@@ -137,11 +123,6 @@ public abstract class BaseJavaCompletionTest extends BaseCompletionTest {
 
     protected FileObject javaFile(String fqcn, String content) {
         return java(fqcn, content);
-    }
-
-    private void indexClasspath() {
-        enqueueJrtJavaBase();
-        indexManager.flush();
     }
 
     private File ensureSharedJdkIndex(List<IndexDefinition<?, ?>> definitions) {
@@ -293,58 +274,6 @@ public abstract class BaseJavaCompletionTest extends BaseCompletionTest {
             }
         }
         return out.toString();
-    }
-
-    private void enqueueJrtJavaBase() {
-        // JDK9+ provides classes via the built-in jrt: filesystem.
-        // We intentionally do NOT crawl the entire image; this is a test harness.
-        int maxClasses = readIntProperty(JRT_MAX_CLASSES_PROP, 2000);
-        int[] remaining = new int[]{Math.max(0, maxClasses)};
-
-        List<FileObject> toIndex = new ArrayList<>(Math.min(remaining[0], 4096));
-
-        for (String root : DEFAULT_JRT_ROOTS) {
-            if (remaining[0] <= 0) {
-                break;
-            }
-            try {
-                FileObject pkgRoot = VirtualFileManager.getInstance().find(URI.create(root));
-                collectClassFilesRecursively(pkgRoot, remaining, toIndex);
-            } catch (Throwable ignored) {
-                // jrt: not available (e.g., JDK8) or blocked.
-                break;
-            }
-        }
-
-        indexManager.updateFilesAsync(toIndex);
-    }
-
-    private void enqueueClasspathEntry(FileObject entry) {
-        if (entry == null || !entry.exists()) {
-            return;
-        }
-
-        if (entry.isFolder()) {
-            List<FileObject> files = new ArrayList<>();
-            collectClassFilesRecursively(entry, null, files);
-            indexManager.updateFilesAsync(files);
-            return;
-        }
-
-        String ext = entry.getExtension();
-        if ("class".equalsIgnoreCase(ext)) {
-            indexManager.updateFilesAsync(java.util.Collections.singletonList(entry));
-            return;
-        }
-
-        if ("jar".equalsIgnoreCase(ext)) {
-            // Walk jar contents via jar: filesystem.
-            URI jarUri = entry.toUri();
-            FileObject jarRoot = VirtualFileManager.getInstance().find(URI.create("jar:" + jarUri + "!/"));
-            List<FileObject> files = new ArrayList<>();
-            collectClassFilesRecursively(jarRoot, null, files);
-            indexManager.updateFilesAsync(files);
-        }
     }
 
     protected static void collectClassFilesRecursively(FileObject dir, int[] remainingClasses, List<FileObject> out) {

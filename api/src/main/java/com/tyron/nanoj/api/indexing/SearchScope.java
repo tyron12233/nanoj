@@ -1,4 +1,4 @@
-package com.tyron.nanoj.core.indexing;
+package com.tyron.nanoj.api.indexing;
 
 @FunctionalInterface
 public interface SearchScope {

@@ -1,4 +1,4 @@
-package com.tyron.nanoj.core.indexing;
+package com.tyron.nanoj.api.indexing;
 
 /**
  * Like {@link IndexProcessor} but also exposes the index key.

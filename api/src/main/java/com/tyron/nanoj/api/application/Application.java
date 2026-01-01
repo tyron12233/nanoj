@@ -3,6 +3,7 @@ package com.tyron.nanoj.api.application;
 import com.tyron.nanoj.api.service.ServiceAccessHolder;
 import com.tyron.nanoj.api.service.ServiceHost;
 
+import java.io.File;
 import java.util.List;
 
 /**
@@ -12,6 +13,8 @@ import java.util.List;
  * to provide their own {@link Application} implementation.
  */
 public interface Application extends ServiceHost {
+
+    File getCacheDirectory();
 
     @Override
     default <T> T getService(Class<T> serviceClass) {

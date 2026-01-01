@@ -78,7 +78,7 @@ Below is an example of how you might build a shared index file from your own too
 
 ```java
 import com.tyron.nanoj.core.indexing.SharedIndexBuilder;
-import com.tyron.nanoj.core.indexing.spi.IndexDefinition;
+import com.tyron.nanoj.api.indexing.IndexDefinition;
 import com.tyron.nanoj.api.vfs.FileObject;
 
 import java.io.File;

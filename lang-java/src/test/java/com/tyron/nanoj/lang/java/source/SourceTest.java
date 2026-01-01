@@ -2,7 +2,8 @@ package com.tyron.nanoj.lang.java.source;
 
 import com.google.common.truth.Truth;
 import com.sun.tools.javac.tree.JCTree;
-import com.tyron.nanoj.core.indexing.IndexManager;
+import com.tyron.nanoj.api.indexing.IndexManager;
+import com.tyron.nanoj.core.indexing.IndexManagerImpl;
 import com.tyron.nanoj.core.service.ProjectServiceManager;
 import com.tyron.nanoj.core.test.MockFileObject;
 import com.tyron.nanoj.lang.java.compiler.CompilationInfo;
@@ -23,8 +24,7 @@ public class SourceTest extends BaseIdeTest {
 
     @Override
     protected void beforeEach() {
-        var indexManager = new IndexManager(project);
-        ProjectServiceManager.registerInstance(project, IndexManager.class, indexManager);
+        var indexManager = IndexManager.getInstance();
         indexManager.register(new JavaBinaryStubIndexer(project));
         indexManager.register(new JavaPackageIndex(project));
         indexManager.register(new JavaSuperTypeIndex(project));
@@ -41,7 +41,7 @@ public class SourceTest extends BaseIdeTest {
 
     @Override
     protected void afterEach() {
-        IndexManager.getInstance(project).dispose();
+        IndexManager.getInstance().dispose();
     }
 
     @Test

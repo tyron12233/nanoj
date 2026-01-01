@@ -24,17 +24,15 @@ public class VirtualFileManagerPersistentTest {
 
     private Path tempDir;
     private FileObject root;
-    private com.tyron.nanoj.api.vfs.VirtualFileManager vfm;
+    private VirtualFileManager vfm;
 
     @BeforeEach
     public void setUp() throws IOException {
         TestApplication.install();
 
-        // Ensure the default core implementation is used for this test
-        // (TestVirtualFileManager doesn't do snapshot syncing).
         ApplicationServiceManager.registerInstance(VirtualFileManager.class, new VirtualFileManagerImpl());
 
-        vfm = com.tyron.nanoj.api.vfs.VirtualFileManager.getInstance();
+        vfm = VirtualFileManager.getInstance();
         vfm.clear();
 
         tempDir = Files.createTempDirectory("nanoj_vfs_persistent_test");
@@ -123,5 +121,10 @@ public class VirtualFileManagerPersistentTest {
         } finally {
             vfm.removeGlobalListener(listener);
         }
+    }
+
+    @Test
+    public void testAttributesCached() {
+
     }
 }

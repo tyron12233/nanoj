@@ -3,16 +3,14 @@ package com.tyron.nanoj.lang.java.indexing;
 import com.sun.tools.classfile.ClassFile;
 import com.sun.tools.javac.file.JavacFileManager;
 import com.sun.tools.javac.parser.ParserFactory;
-import com.sun.tools.javac.tree.JCTree;
 import com.sun.tools.javac.util.Context;
 import com.tyron.nanoj.api.project.Project;
 import com.tyron.nanoj.api.vfs.FileObject;
-import com.tyron.nanoj.core.indexing.spi.IndexDefinition;
+import com.tyron.nanoj.api.indexing.IndexDefinition;
 import com.tyron.nanoj.core.service.ProjectServiceManager;
 
 import javax.tools.JavaFileObject;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
@@ -42,7 +40,7 @@ public class JavaPackageIndex implements IndexDefinition<String, JavaPackageInde
     }
 
     @Override
-    public String getId() { return ID; }
+    public String id() { return ID; }
 
     @Override
     public int getVersion() { return VERSION; }

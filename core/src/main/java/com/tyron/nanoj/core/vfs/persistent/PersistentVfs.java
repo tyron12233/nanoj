@@ -13,16 +13,10 @@ import java.util.Objects;
  * - stable file ids (best-effort via fileKey for local FS)
  * - persistent snapshot records
  */
-public final class PersistentVfs {
+public record PersistentVfs(PersistentVfsStorage storage) {
 
-    private final PersistentVfsStorage storage;
-
-    public PersistentVfs(Path dbFile) {
-        this.storage = new PersistentVfsStorage(dbFile);
-    }
-
-    public PersistentVfsStorage storage() {
-        return storage;
+    public PersistentVfs(Path storage) {
+        this(new PersistentVfsStorage(storage));
     }
 
     public synchronized void close() {

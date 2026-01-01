@@ -3,7 +3,7 @@ package com.tyron.nanoj.lang.java.indexing;
 import com.sun.tools.classfile.*;
 import com.tyron.nanoj.api.project.Project;
 import com.tyron.nanoj.api.vfs.FileObject;
-import com.tyron.nanoj.core.indexing.spi.IndexDefinition;
+import com.tyron.nanoj.api.indexing.IndexDefinition;
 import com.tyron.nanoj.core.service.ProjectServiceManager;
 import com.tyron.nanoj.lang.java.indexing.stub.ClassStub;
 
@@ -34,7 +34,7 @@ public class JavaBinaryStubIndexer implements IndexDefinition<String, ClassStub>
     }
 
     @Override
-    public String getId() {
+    public String id() {
         return ID;
     }
 

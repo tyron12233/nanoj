@@ -6,8 +6,8 @@ import com.sun.tools.javac.code.Symbol.ClassSymbol;
 import com.sun.tools.javac.code.Symtab;
 import com.sun.tools.javac.util.Context;
 import com.sun.tools.javac.util.Name;
+import com.tyron.nanoj.api.indexing.IndexManager;
 import com.tyron.nanoj.api.project.Project;
-import com.tyron.nanoj.core.indexing.IndexManager;
 import com.tyron.nanoj.lang.java.indexing.JavaBinaryStubIndexer;
 import com.tyron.nanoj.lang.java.indexing.stub.ClassStub;
 
@@ -34,7 +34,7 @@ public class IndexAwareClassFinder extends ClassFinder {
         super(context);
         this.context = context;
         this.symtab = Symtab.instance(context);
-        this.indexManager = IndexManager.getInstance(project);
+        this.indexManager = IndexManager.getInstance();
     }
 
     /**

@@ -1,13 +1,14 @@
 package com.tyron.nanoj.lang.java.indexing;
 
 import com.tyron.nanoj.api.vfs.FileObject;
-import com.tyron.nanoj.core.indexing.IndexManager;
+import com.tyron.nanoj.api.indexing.IndexManager;
+import com.tyron.nanoj.core.indexing.IndexManagerImpl;
 import com.tyron.nanoj.core.service.ProjectServiceManager;
 import com.tyron.nanoj.core.test.MockFileObject;
 import com.tyron.nanoj.core.test.MockProject;
 import com.tyron.nanoj.core.vfs.JrtFileSystem;
 import com.tyron.nanoj.api.vfs.VirtualFileManager;
-import com.tyron.nanoj.core.indexing.spi.IndexDefinition;
+import com.tyron.nanoj.api.indexing.IndexDefinition;
 import com.tyron.nanoj.testFramework.BaseIdeTest;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Tag;
@@ -29,7 +30,7 @@ import java.util.Map;
  *
  * This benchmark measures two things per indexer:
  * 1) "Pure map" cost: time spent in {@link IndexDefinition#map(FileObject, Object)} per file.
- * 2) "End-to-end" cost: time spent indexing the same files through {@link IndexManager#updateFilesAsync(Iterable)}
+ * 2) "End-to-end" cost: time spent indexing the same files through {@link IndexManager#processRoots(Iterable)}
  *    with a MapDB commit.
  *
  * Notes:
@@ -46,10 +47,7 @@ public class JrtIndexBenchmarkTest extends BaseIdeTest {
     private static final String WARMUP_PROP = "nanoj.bench.warmup";
 
     private static final String[] DEFAULT_JRT_ROOTS = {
-            "jrt:/modules/java.base/java/lang/",
-            "jrt:/modules/java.base/java/util/",
-            "jrt:/modules/java.base/java/io/",
-            "jrt:/modules/java.base/java/time/"
+            "jrt:/modules/"
     };
 
     @Test
@@ -59,7 +57,7 @@ public class JrtIndexBenchmarkTest extends BaseIdeTest {
 
         Assumptions.assumeTrue(isJrtAvailable(), "jrt: filesystem is not available in this runtime");
 
-        int maxClasses = readInt(JRT_MAX_CLASSES_PROP, 2000);
+        int maxClasses = readInt(JRT_MAX_CLASSES_PROP, 200000);
         int warmup = Math.max(0, readInt(WARMUP_PROP, 1));
 
         List<String> roots = readCsvOrDefault(JRT_ROOTS_PROP, DEFAULT_JRT_ROOTS);
@@ -83,7 +81,7 @@ public class JrtIndexBenchmarkTest extends BaseIdeTest {
 
         for (IndexDefinition<?, ?> def : indexers) {
             System.out.println("\n============================================================");
-            System.out.println("Indexer: " + def.getClass().getName() + "  (id=" + def.getId() + ", v=" + def.getVersion() + ")");
+            System.out.println("Indexer: " + def.getClass().getName() + "  (id=" + def.id() + ", v=" + def.getVersion() + ")");
 
             // Warmup: run map() without recording.
             for (int i = 0; i < warmup; i++) {
@@ -192,7 +190,7 @@ public class JrtIndexBenchmarkTest extends BaseIdeTest {
         long t1 = System.nanoTime();
 
         PureMapResult r = new PureMapResult();
-        r.indexId = def.getId();
+        r.indexId = def.id();
         r.indexerClass = def.getClass().getName();
         r.totalNanos = t1 - t0;
         r.visitedFiles = visited;
@@ -205,23 +203,23 @@ public class JrtIndexBenchmarkTest extends BaseIdeTest {
 
     private EndToEndResult runEndToEnd(IndexDefinition<?, ?> def, List<FileObject> classFiles) {
         // Create a fresh project+IndexManager so results reflect only this indexer.
-        File cacheDir = new File(temporaryFolder, "bench-cache-" + sanitize(def.getId()));
+        File cacheDir = new File(temporaryFolder, "bench-cache-" + sanitize(def.id()));
         //noinspection ResultOfMethodCallIgnored
         cacheDir.mkdirs();
 
         MockProject benchProject = new MockProject(cacheDir, new MockFileObject("/bench_root", ""));
 
         try {
-            IndexManager manager = ProjectServiceManager.getService(benchProject, IndexManager.class);
-            manager.register(def);
+            IndexManagerImpl manager = (IndexManagerImpl) IndexManager.getInstance();
+                    manager.register(def);
 
             long t0 = System.nanoTime();
-            manager.updateFilesAsync(classFiles);
+            manager.processBatch(classFiles);
             manager.flush();
             long t1 = System.nanoTime();
 
             EndToEndResult r = new EndToEndResult();
-            r.indexId = def.getId();
+            r.indexId = def.id();
             r.indexerClass = def.getClass().getName();
             r.fileCount = classFiles.size();
             r.totalNanos = t1 - t0;

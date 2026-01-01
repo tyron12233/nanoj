@@ -1,5 +1,6 @@
 package com.tyron.nanoj.api.dumb;
 
+import com.tyron.nanoj.api.application.ApplicationManager;
 import com.tyron.nanoj.api.project.Project;
 
 /**
@@ -10,8 +11,8 @@ import com.tyron.nanoj.api.project.Project;
  */
 public interface DumbService {
 
-    static DumbService getInstance(Project project) {
-        return project.getService(DumbService.class);
+    static DumbService getInstance() {
+        return ApplicationManager.getApplication().getService(DumbService.class);
     }
 
     /**

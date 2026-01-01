@@ -1,5 +1,6 @@
 package com.tyron.nanoj.desktop.ui;
 
+import com.tyron.nanoj.api.editor.FileDocumentManager;
 import com.tyron.nanoj.api.project.Project;
 import com.tyron.nanoj.api.dumb.DumbService;
 import com.tyron.nanoj.api.indexing.IndexingProgressListener;
@@ -9,8 +10,9 @@ import com.tyron.nanoj.api.tasks.TaskExecutionListener;
 import com.tyron.nanoj.api.tasks.TaskResult;
 import com.tyron.nanoj.api.tasks.TasksService;
 import com.tyron.nanoj.api.vfs.FileObject;
-import com.tyron.nanoj.core.indexing.IndexManager;
+import com.tyron.nanoj.api.indexing.IndexManager;
 import com.tyron.nanoj.api.vfs.VirtualFileManager;
+import com.tyron.nanoj.core.editor.FileDocumentManagerImpl;
 import com.tyron.nanoj.core.indexing.IndexingInputCollector;
 import com.tyron.nanoj.desktop.NanojCompletionPopup;
 import com.tyron.nanoj.desktop.diagnostics.NanojDiagnosticsParser;
@@ -64,7 +66,7 @@ public final class DesktopIdeFrame {
 
     public DesktopIdeFrame(Project project) {
         this.project = Objects.requireNonNull(project, "project");
-        this.indexManager = IndexManager.getInstance(project);
+        this.indexManager = IndexManager.getInstance();
 
         this.frame = new JFrame("Nanoj - " + project.getName());
         this.frame.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
@@ -265,7 +267,6 @@ public final class DesktopIdeFrame {
 
         CompletableFuture.runAsync(() -> {
             try {
-                // 1) Invalidate VFS persistent cache.
                 VirtualFileManager vfm = VirtualFileManager.getInstance();
                 try {
                     vfm.clear();
@@ -279,15 +280,8 @@ public final class DesktopIdeFrame {
                 } catch (Throwable ignored) {
                 }
 
-                // 2) Invalidate local index caches.
                 try {
-                    indexManager.invalidateLocalCachesAsync();
-                } catch (Throwable ignored) {
-                }
-
-                // 3) Re-submit indexing roots (lazy iterator).
-                try {
-                    new IndexingInputCollector(project, indexManager).submitAll();
+//                    indexManager.invalidateLocalCachesAsync();
                 } catch (Throwable ignored) {
                 }
             } finally {
@@ -304,7 +298,7 @@ public final class DesktopIdeFrame {
 
         boolean dumb;
         try {
-            dumb = DumbService.getInstance(project).isDumb();
+            dumb = DumbService.getInstance().isDumb();
         } catch (Throwable ignored) {
             dumb = false;
         }
@@ -594,8 +588,8 @@ public final class DesktopIdeFrame {
             // Debounced save + reindex.
             Timer saveTimer = new Timer(350, e -> {
                 try {
-                    Files.writeString(Path.of(file.getPath()), editor.getText(), StandardCharsets.UTF_8);
-                    indexManager.updateFile(file);
+
+                    FileDocumentManagerImpl.getInstance(project).commitAllDocuments();
                 } catch (IOException ex) {
                     ex.printStackTrace();
                 }

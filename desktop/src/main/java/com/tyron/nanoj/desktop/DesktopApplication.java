@@ -3,6 +3,8 @@ package com.tyron.nanoj.desktop;
 import com.tyron.nanoj.api.application.Application;
 import com.tyron.nanoj.api.application.ApplicationManager;
 
+import java.io.File;
+
 /**
  * Desktop platform application implementation.
  * <p>
@@ -25,5 +27,10 @@ public final class DesktopApplication implements Application {
      */
     public static void install() {
         ApplicationManager.setApplication(INSTANCE);
+    }
+
+    @Override
+    public File getCacheDirectory() {
+        return new File("build");
     }
 }

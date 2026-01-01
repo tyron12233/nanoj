@@ -12,70 +12,45 @@ import java.util.Set;
 
 /**
  * Persistent "was this file already indexed and unchanged?" tracking.
- *
+ * <p>
  * Stored in the same MapDB as indices so it survives restarts.
- *
+ * <p>
  * Note: today we use (lastModified, length). If we need stronger guarantees,
  * we can extend this to store a content hash (e.g. CRC32/SHA-256) and compute it
  * opportunistically (for example from already-read .class bytes during indexing).
  */
 public final class IndexingStampStore {
 
-    private final Map<String, Long> indexPathToLastModified;
-    private final Map<String, Long> indexPathToLength;
-    private final Map<String, Integer> indexPathToVersion;
+    private final Map<Integer, Long> indexFileIdToLastModified;
+    private final Map<Integer, Long> indexFileIdToLength;
+
+    private final Map<String, Integer> indexIdToVersion;
 
     IndexingStampStore(DB db) {
-        this.indexPathToLastModified = db.hashMap("sys_index_path_last_modified", Serializer.STRING, Serializer.LONG).createOrOpen();
-        this.indexPathToLength = db.hashMap("sys_index_path_length", Serializer.STRING, Serializer.LONG).createOrOpen();
-        this.indexPathToVersion = db.hashMap("sys_index_path_version", Serializer.STRING, Serializer.INTEGER).createOrOpen();
+        this.indexFileIdToLength = db.hashMap("sys_file_to_length")
+                .keySerializer(Serializer.INTEGER)
+                .valueSerializer(Serializer.LONG)
+                .createOrOpen();
+
+        this.indexFileIdToLastModified = db.hashMap("sys_file_to_last_modified")
+                .keySerializer(Serializer.INTEGER)
+                .valueSerializer(Serializer.LONG)
+                .createOrOpen();
+
+        this.indexIdToVersion = db.hashMap("sys_index_id_to_version")
+                .keySerializer(Serializer.STRING)
+                .valueSerializer(Serializer.INTEGER)
+                .createOrOpen();
     }
 
-    public boolean isUpToDate(String indexId, FileObject file) {
-        return isUpToDate(indexId, -1, file);
-    }
 
-    /**
-     * Version-aware stamp check.
-     *
-     * @param expectedVersion if negative, version is not checked.
-     */
-    public boolean isUpToDate(String indexId, int expectedVersion, FileObject file) {
-        if (indexId == null || indexId.isBlank() || file == null || file.isFolder()) {
+
+    public boolean isUpToDate(FileObject file) {
+        Long last = indexFileIdToLastModified.get(file.getId());
+        Long len = indexFileIdToLength.get(file.getId());
+
+        if (last == null && len == null) {
             return false;
-        }
-
-        String path;
-        try {
-            path = file.getPath();
-        } catch (Throwable t) {
-            return false;
-        }
-
-        return isUpToDate(indexId, expectedVersion, path, file);
-    }
-
-    public boolean isUpToDate(String indexId, String path, FileObject file) {
-        return isUpToDate(indexId, -1, path, file);
-    }
-
-    public boolean isUpToDate(String indexId, int expectedVersion, String path, FileObject file) {
-        if (indexId == null || indexId.isBlank() || path == null || path.isBlank() || file == null || file.isFolder()) {
-            return false;
-        }
-
-        String key = key(indexId, path);
-
-        Long last = indexPathToLastModified.get(key);
-        Long len = indexPathToLength.get(key);
-        Integer ver = indexPathToVersion.get(key);
-        if (last == null || len == null) {
-            return false;
-        }
-        if (expectedVersion >= 0) {
-            if (ver == null || ver != expectedVersion) {
-                return false;
-            }
         }
 
         long curLast;
@@ -94,35 +69,10 @@ public final class IndexingStampStore {
         return last == curLast && len == curLen;
     }
 
-    public void update(String indexId, FileObject file) {
-        update(indexId, -1, file);
-    }
-
-    public void update(String indexId, int version, FileObject file) {
-        if (indexId == null || indexId.isBlank() || file == null || file.isFolder()) {
+    public void update(FileObject file) {
+        if (file == null) {
             return;
         }
-
-        String path;
-        try {
-            path = file.getPath();
-        } catch (Throwable t) {
-            return;
-        }
-
-        update(indexId, version, path, file);
-    }
-
-    public void update(String indexId, String path, FileObject file) {
-        update(indexId, -1, path, file);
-    }
-
-    public void update(String indexId, int version, String path, FileObject file) {
-        if (indexId == null || indexId.isBlank() || path == null || path.isBlank() || file == null || file.isFolder()) {
-            return;
-        }
-
-        String key = key(indexId, path);
 
         long curLast;
         long curLen;
@@ -137,54 +87,35 @@ public final class IndexingStampStore {
             return;
         }
 
-        indexPathToLastModified.put(key, curLast);
-        indexPathToLength.put(key, curLen);
-        if (version >= 0) {
-            indexPathToVersion.put(key, version);
-        }
+        indexFileIdToLastModified.put(file.getId(), curLast);
+        indexFileIdToLength.put(file.getId(), curLen);
     }
 
-    private static String key(String indexId, String path) {
-        // Keep it compact and stable; NUL cannot appear in normal URI paths.
-        return indexId + "\u0000" + path;
+    public boolean isIndexDirty(String indexId, int version) {
+        Integer storedVersion = indexIdToVersion.get(indexId);
+        if (storedVersion == null) {
+            return true;
+        }
+
+        return storedVersion < version;
     }
 
-    /**
-     * Best-effort snapshot of all file paths that have any stamp entry.
-     * <p>
-     * This is used to seed indexing inputs for backfill (e.g., when a new index definition is registered).
-     */
-    public List<String> getAllStampedPathsSnapshot() {
-        try {
-            Set<String> out = new HashSet<>();
-            for (String k : indexPathToLastModified.keySet()) {
-                if (k == null) continue;
-                int sep = k.indexOf('\u0000');
-                if (sep < 0 || sep + 1 >= k.length()) {
-                    continue;
-                }
-                String path = k.substring(sep + 1);
-                if (!path.isBlank()) {
-                    out.add(path);
-                }
-            }
-            return new ArrayList<>(out);
-        } catch (Throwable ignored) {
-            return List.of();
-        }
+    public void updateIndexVersion(String indexId, int version) {
+        indexIdToVersion.put(indexId, version);
     }
+
 
     public void clear() {
         try {
-            indexPathToLastModified.clear();
+            indexFileIdToLength.clear();
         } catch (Throwable ignored) {
         }
         try {
-            indexPathToLength.clear();
+            indexFileIdToLastModified.clear();
         } catch (Throwable ignored) {
         }
         try {
-            indexPathToVersion.clear();
+            indexIdToVersion.clear();
         } catch (Throwable ignored) {
         }
     }

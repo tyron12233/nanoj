@@ -52,6 +52,7 @@ public final class PersistentVfsStorage implements Closeable {
         this.idToUri = db.hashMap("vfs.idToUri", Serializer.INTEGER, Serializer.STRING).createOrOpen();
         this.fileKeyToId = db.hashMap("vfs.fileKeyToId", Serializer.STRING, Serializer.INTEGER).createOrOpen();
 
+        //noinspection unchecked
         this.recordsByUri = db.treeMap("vfs.recordsByUri", Serializer.STRING, Serializer.JAVA).createOrOpen();
         this.trackedRoots = db.hashMap("vfs.trackedRoots", Serializer.STRING, Serializer.BOOLEAN).createOrOpen();
     }

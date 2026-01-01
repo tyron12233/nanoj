@@ -2,7 +2,8 @@ package com.tyron.nanoj.lang.java.compiler;
 
 import com.sun.tools.javac.api.JavacTool;
 import com.sun.tools.javac.util.Context;
-import com.tyron.nanoj.core.indexing.IndexManager;
+import com.tyron.nanoj.api.indexing.IndexManager;
+import com.tyron.nanoj.core.indexing.AbstractIndexManager;
 import com.tyron.nanoj.lang.java.indexing.JavaBinaryStubIndexer;
 import com.tyron.nanoj.lang.java.indexing.JavaFullClassNameIndex;
 import com.tyron.nanoj.lang.java.indexing.JavaPackageIndex;
@@ -22,7 +23,7 @@ public class CompilerIntegrationTest extends BaseIdeTest {
 
     @Override
     protected void beforeEach() {
-        var indexManager = IndexManager.getInstance(project);
+        var indexManager = IndexManager.getInstance();
 
         indexManager.register(new JavaBinaryStubIndexer(project));
         indexManager.register(new ShortClassNameIndex(project));
@@ -142,7 +143,7 @@ public class CompilerIntegrationTest extends BaseIdeTest {
             project.addLibrary(vfsFile);
         }
 
-        IndexManager.getInstance(project).flush();
+        ((AbstractIndexManager) IndexManager.getInstance()).flush();
     }
 
     /**
@@ -208,7 +209,7 @@ public class CompilerIntegrationTest extends BaseIdeTest {
         }
 
         @Override
-        public JavaFileObject getJavaFileForOutput(Location location, String className, JavaFileObject.Kind kind, javax.tools.FileObject sibling) throws IOException {
+        public JavaFileObject getJavaFileForOutput(Location location, String className, JavaFileObject.Kind kind, FileObject sibling) throws IOException {
             // Create an in-memory JavaFileObject
             return new SimpleJavaFileObject(URI.create("mem:///" + className.replace('.', '/') + ".class"), kind) {
 

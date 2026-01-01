@@ -1,7 +1,6 @@
 package com.tyron.nanoj.core.dumb;
 
 import com.tyron.nanoj.api.dumb.DumbService;
-import com.tyron.nanoj.api.project.Project;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -14,15 +13,13 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public final class DumbServiceImpl implements DumbService {
 
-    private final Project project;
-
     private final AtomicInteger dumbCounter = new AtomicInteger(0);
 
     private final Object queueLock = new Object();
     private final List<Runnable> runWhenSmartQueue = new ArrayList<>();
 
-    public DumbServiceImpl(Project project) {
-        this.project = Objects.requireNonNull(project, "project");
+    public DumbServiceImpl() {
+
     }
 
     @Override

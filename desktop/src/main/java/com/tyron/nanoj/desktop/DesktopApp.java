@@ -1,14 +1,18 @@
 package com.tyron.nanoj.desktop;
 
+import com.tyron.nanoj.api.dumb.DumbService;
 import com.tyron.nanoj.api.language.LanguageSupport;
 import com.tyron.nanoj.api.editor.EditorManager;
 import com.tyron.nanoj.api.project.Project;
 import com.tyron.nanoj.api.plugins.ProjectPluginRegistry;
 import com.tyron.nanoj.api.vfs.FileObject;
 import com.tyron.nanoj.core.completion.CompletionCore;
+import com.tyron.nanoj.core.dumb.DumbServiceImpl;
 import com.tyron.nanoj.core.editor.EditorCore;
-import com.tyron.nanoj.core.indexing.IndexManager;
+import com.tyron.nanoj.api.indexing.IndexManager;
+import com.tyron.nanoj.core.indexing.IndexManagerImpl;
 import com.tyron.nanoj.core.project.ProjectLifecycle;
+import com.tyron.nanoj.core.service.ApplicationServiceManager;
 import com.tyron.nanoj.core.service.ProjectServiceManager;
 import com.tyron.nanoj.api.vfs.VirtualFileManager;
 import com.tyron.nanoj.desktop.ui.DesktopEditorManager;
@@ -107,15 +111,15 @@ public final class DesktopApp {
                 buildFo
         );
 
-        String sharedIndexPaths = System.getProperty(IndexManager.SHARED_INDEX_PATHS_KEY);
-        if (sharedIndexPaths == null || sharedIndexPaths.isBlank()) {
-            sharedIndexPaths = System.getenv("NANOJ_SHARED_INDEX_PATHS");
-        }
-        if (sharedIndexPaths != null && !sharedIndexPaths.isBlank()) {
-            project.getConfiguration().setProperty(IndexManager.SHARED_INDEX_PATHS_KEY, sharedIndexPaths);
-        }
+        ApplicationServiceManager.registerBinding(
+                IndexManager.class,
+                IndexManagerImpl.class
+        );
+        ApplicationServiceManager.registerBinding(
+                DumbService.class,
+                DumbServiceImpl.class
+        );
 
-        // 3) Register Nanoj services/extensions
         EditorCore.register(project);
         CompletionCore.register(project);
         ProjectServiceManager.registerExtension(project, LanguageSupport.class, JavaLanguageSupport.class);
@@ -126,13 +130,12 @@ public final class DesktopApp {
         // Java compiler + indexing services
         ProjectServiceManager.registerBindingIfAbsent(project, JavacFileManagerService.class, JavacFileManagerService.class);
 
-        IndexManager indexManager = IndexManager.getInstance(project);
+        IndexManager indexManager = IndexManager.getInstance();
         indexManager.register(new JavaBinaryStubIndexer(project));
         indexManager.register(new ShortClassNameIndex(project));
         indexManager.register(new JavaFullClassNameIndex(project));
         indexManager.register(new JavaPackageIndex(project));
         indexManager.register(new JavaSuperTypeIndex(project));
-        project.getConfiguration().setProperty(IndexManager.DUMB_THRESHOLD_MS_KEY, "5000");
 
         ProjectLifecycle.fireProjectOpened(project);
 

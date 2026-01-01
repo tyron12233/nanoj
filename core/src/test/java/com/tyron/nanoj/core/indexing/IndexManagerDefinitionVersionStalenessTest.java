@@ -1,7 +1,9 @@
 package com.tyron.nanoj.core.indexing;
 
 import com.tyron.nanoj.api.vfs.FileObject;
-import com.tyron.nanoj.core.indexing.spi.IndexDefinition;
+import com.tyron.nanoj.api.indexing.IndexDefinition;
+import com.tyron.nanoj.api.indexing.IndexManager;
+import com.tyron.nanoj.api.vfs.VirtualFileManager;
 import com.tyron.nanoj.testFramework.BaseIdeTest;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -17,14 +19,14 @@ public class IndexManagerDefinitionVersionStalenessTest extends BaseIdeTest {
 
     @Test
     public void versionBumpInvalidatesExistingIndexData() throws Exception {
-        IndexManager indexManager = IndexManager.getInstance(project);
+        IndexManagerImpl indexManager = (IndexManagerImpl) IndexManager.getInstance();
 
         AtomicInteger calls = new AtomicInteger();
 
         indexManager.register(new FixedKeyIndexer(indexManager, "ver_index", 1, "v1", calls));
 
         FileObject file = file("src/Hello.java", "class Hello {} ");
-        indexManager.updateFile(file);
+        indexManager.processBatch(List.of(file));
         indexManager.flush();
 
         Assertions.assertEquals(List.of(file.getPath()), indexManager.search("ver_index", "v1"));
@@ -37,18 +39,8 @@ public class IndexManagerDefinitionVersionStalenessTest extends BaseIdeTest {
         // After version bump, old key should not be visible (index was cleared).
         Assertions.assertTrue(indexManager.search("ver_index", "v1").isEmpty(), "old index data should be cleared on version bump");
 
-        indexManager.updateFile(file);
-
-        // Indexing inputs are submitted asynchronously; poll until v2 appears.
-        long deadlineNs = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
-        while (System.nanoTime() < deadlineNs) {
-            indexManager.flush();
-            List<String> v2 = indexManager.search("ver_index", "v2");
-            if (!v2.isEmpty()) {
-                break;
-            }
-            Thread.sleep(25);
-        }
+        indexManager.processBatch(List.of(file));
+        indexManager.flush();
 
         Assertions.assertEquals(List.of(file.getPath()), indexManager.search("ver_index", "v2"));
         Assertions.assertTrue(calls.get() > callsAfterV1, "v2 backfill should have run");
@@ -70,7 +62,7 @@ public class IndexManagerDefinitionVersionStalenessTest extends BaseIdeTest {
         }
 
         @Override
-        public String getId() {
+        public String id() {
             return id;
         }
 
@@ -94,7 +86,7 @@ public class IndexManagerDefinitionVersionStalenessTest extends BaseIdeTest {
 
         @Override
         public boolean isValueForFile(String value, int fileId) {
-            String pathForId = indexManager.getFilePath(fileId);
+            String pathForId = VirtualFileManager.getInstance().findById(fileId).getPath();
             return value != null && value.equals(pathForId);
         }
 

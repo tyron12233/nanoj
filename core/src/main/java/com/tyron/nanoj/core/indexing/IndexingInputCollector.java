@@ -12,7 +12,6 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
-import java.util.concurrent.Future;
 
 /**
  * Lazy iterator/collector for indexing inputs.
@@ -28,23 +27,9 @@ import java.util.concurrent.Future;
 public final class IndexingInputCollector implements Iterable<FileObject> {
 
     private final Project project;
-    private final IndexManager indexManager;
 
-    public IndexingInputCollector(Project project, IndexManager indexManager) {
+    public IndexingInputCollector(Project project) {
         this.project = project;
-        this.indexManager = indexManager;
-    }
-
-    /**
-     * Collects inputs and submits them to the given {@link IndexManager}.
-     *
-     * Uses {@link IndexManager#updateFilesAsync(Iterable)} so {@link IndexManager} can decide staleness per index.
-     */
-    public Future<?> submitAll() {
-        if (indexManager == null) {
-            return null;
-        }
-        return indexManager.updateFilesAsync(this);
     }
 
     @Override
@@ -56,19 +41,6 @@ public final class IndexingInputCollector implements Iterable<FileObject> {
         final String buildDirPath = safePath(safeBuildDir(project));
         final List<String> sourceRootPaths = safeSourceRootPaths(project);
 
-        // Snapshot (best-effort) of known leaf paths (typically small; helps tests).
-        final List<String> knownPaths;
-        if (indexManager != null && !sourceRootPaths.isEmpty()) {
-            List<String> snapshot;
-            try {
-                snapshot = indexManager.getKnownFilePathsSnapshot();
-            } catch (Throwable ignored) {
-                snapshot = List.of();
-            }
-            knownPaths = snapshot != null ? snapshot : List.of();
-        } else {
-            knownPaths = List.of();
-        }
 
         final IndexableFilesDeduplicateFilter dedup = new IndexableFilesDeduplicateFilter();
         final List<com.tyron.nanoj.api.indexing.iterators.IndexableFilesIterator> iterators = safeIterators(project);
@@ -116,20 +88,6 @@ public final class IndexingInputCollector implements Iterable<FileObject> {
             }
 
             private FileObject computeNext() {
-                // 1) known leaf files
-                while (knownIndex < knownPaths.size()) {
-                    String p = knownPaths.get(knownIndex++);
-                    FileObject fo = resolvePathToFileObject(p);
-                    if (fo == null || fo.isFolder()) continue;
-
-                    String foPath = safePath(fo);
-                    if (!isUnderAnyRoot(foPath, sourceRootPaths)) continue;
-                    if (isInOrUnder(foPath, buildDirPath)) continue;
-                    if (!dedup.shouldAccept(fo)) continue;
-                    return fo;
-                }
-
-                // 2) iterator-provided roots (buffered per iterator)
                 while (true) {
                     while (bufferedIndex < bufferedRoots.size()) {
                         FileObject root = bufferedRoots.get(bufferedIndex++);

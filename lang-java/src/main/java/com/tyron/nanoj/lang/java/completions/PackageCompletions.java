@@ -1,23 +1,19 @@
 package com.tyron.nanoj.lang.java.completions;
 
 import com.sun.source.tree.ErroneousTree;
-import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.MemberSelectTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.util.TreePath;
-import com.sun.source.util.Trees;
 import com.sun.tools.javac.tree.JCTree;
 import com.tyron.nanoj.api.completion.CompletionResultSet;
 import com.tyron.nanoj.api.completion.LookupElementBuilder;
 import com.tyron.nanoj.api.project.Project;
-import com.tyron.nanoj.core.indexing.IndexManager;
-import com.tyron.nanoj.core.indexing.Scopes;
+import com.tyron.nanoj.api.indexing.IndexManager;
+import com.tyron.nanoj.api.indexing.Scopes;
 import com.tyron.nanoj.lang.java.compiler.CompilationInfo;
 import com.tyron.nanoj.lang.java.indexing.JavaPackageIndex;
 
 import javax.lang.model.type.TypeKind;
-import javax.lang.model.type.TypeMirror;
-import javax.lang.model.util.Types;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
@@ -86,7 +82,7 @@ public final class PackageCompletions {
         String basePrefix = basePkg.isEmpty() ? prefix : (basePkg + "." + prefix);
         String searchPrefix = basePrefix;
 
-        IndexManager indexManager = IndexManager.getInstance(project);
+        IndexManager indexManager = IndexManager.getInstance();
 
         Set<String> seenPackages = new HashSet<>();
         Set<String> seenClasses = new HashSet<>();

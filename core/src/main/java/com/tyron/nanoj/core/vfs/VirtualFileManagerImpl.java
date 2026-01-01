@@ -10,6 +10,7 @@ import com.tyron.nanoj.api.service.Disposable;
 import com.tyron.nanoj.core.vfs.persistent.PersistentVfs;
 import com.tyron.nanoj.core.vfs.persistent.PersistentVfsRecord;
 import org.jetbrains.annotations.TestOnly;
+import org.jspecify.annotations.NonNull;
 
 import java.io.File;
 import java.io.IOException;
@@ -51,19 +52,14 @@ public class VirtualFileManagerImpl implements VirtualFileManager, Disposable {
     public VirtualFileManagerImpl() {
         this.persistentVfs = new PersistentVfs(defaultVfsDbPath());
 
-        // Register default Local NIO FS
         register(LocalFileSystem.getInstance());
-
-        // Register read-only jar filesystem
         register(JarFileSystem.getInstance());
-
-        // Register read-only jrt filesystem (JDK modules)
         register(JrtFileSystem.getInstance());
     }
 
     @Override
     public void dispose() {
-        // Detach bridges first: otherwise singleton file systems (e.g. LocalFileSystem)
+        // detach bridges first: otherwise singleton file systems (e.g. LocalFileSystem)
         // can keep calling this instance after its DB is closed.
         try {
             for (FileSystem fs : registry.values()) {
@@ -73,12 +69,12 @@ public class VirtualFileManagerImpl implements VirtualFileManager, Disposable {
             registry.clear();
             globalListeners.clear();
         } catch (Throwable ignored) {
-            // Best-effort.
+            // best-effort.
         } finally {
             try {
                 persistentVfs.close();
             } catch (Throwable ignored) {
-                // Best-effort.
+                // best-effort.
             }
         }
     }
@@ -121,7 +117,7 @@ public class VirtualFileManagerImpl implements VirtualFileManager, Disposable {
             try {
                 fs.refresh(asynchronous);
             } catch (Throwable ignored) {
-                // Best-effort.
+                // best-effort.
             }
         }
 
@@ -477,13 +473,13 @@ public class VirtualFileManagerImpl implements VirtualFileManager, Disposable {
             Path start = PersistentVfs.toLocalPath(rootUri);
             Files.walkFileTree(start, new SimpleFileVisitor<>() {
                 @Override
-                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                public @NonNull FileVisitResult preVisitDirectory(@NonNull Path dir, @NonNull BasicFileAttributes attrs) {
                     add(dir, attrs);
                     return FileVisitResult.CONTINUE;
                 }
 
                 @Override
-                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+                public @NonNull FileVisitResult visitFile(@NonNull Path file, @NonNull BasicFileAttributes attrs) {
                     add(file, attrs);
                     return FileVisitResult.CONTINUE;
                 }
@@ -536,7 +532,7 @@ public class VirtualFileManagerImpl implements VirtualFileManager, Disposable {
                     BasicFileAttributes attrs = Files.readAttributes(PersistentVfs.toLocalPath(uri), BasicFileAttributes.class);
                     fileKey = PersistentVfs.tryGetLocalFileKey(uri, attrs);
                 } catch (Throwable ignored) {
-                    // Best-effort.
+                    // best-effort.
                 }
             }
         }

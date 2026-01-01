@@ -1,9 +1,10 @@
-~package com.tyron.nanoj.core.indexing;
+package com.tyron.nanoj.core.indexing;
 
 import com.tyron.nanoj.core.test.MockFileObject;
 import com.tyron.nanoj.testFramework.BaseIdeTest;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import com.tyron.nanoj.api.indexing.IndexManager;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -21,10 +22,10 @@ public class IndexingInputCollectorTest extends BaseIdeTest {
         project.setBuildDirectory(buildDir);
         project.addSourceRoot(buildDir);
 
-        IndexManager manager = IndexManager.getInstance(project);
+        IndexManager manager = IndexManager.getInstance();
 
         List<String> paths = new ArrayList<>();
-        for (var fo : new IndexingInputCollector(project, manager)) {
+        for (var fo : new IndexingInputCollector(project)) {
             if (fo == null) continue;
             try {
                 paths.add(fo.getPath());

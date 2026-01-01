@@ -2,8 +2,11 @@ package com.tyron.nanoj.core.indexing;
 
 import com.tyron.nanoj.api.project.Project;
 import com.tyron.nanoj.api.vfs.FileObject;
-import com.tyron.nanoj.core.indexing.spi.IndexDefinition;
+import com.tyron.nanoj.api.indexing.IndexDefinition;
+import com.tyron.nanoj.api.indexing.IndexManager;
+import com.tyron.nanoj.api.vfs.VirtualFileManager;
 import com.tyron.nanoj.core.test.MockFileObject;
+import com.tyron.nanoj.testFramework.BaseIdeTest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,48 +21,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-public class IndexManagerTest {
+public class IndexManagerTest extends BaseIdeTest {
 
-    private File cacheDir;
-    private Project mockProject;
-    private IndexManager indexManager;
+    private IndexManagerImpl indexManager;
 
     @BeforeEach
     public void setUp() throws IOException {
-        cacheDir = Files.createTempDirectory("ristretto_cache").toFile();
-
-        mockProject = new Project() {
-            @Override public File getCacheDir() { return cacheDir; }
-            // Stub other methods...
-            @Override public String getName() { return ""; }
-            @Override public FileObject getRootDirectory() { return null; }
-            @Override public List<FileObject> getSourceRoots() { return List.of(); }
-            @Override public List<FileObject> getResourceRoots() { return List.of(); }
-            @Override public List<FileObject> getClassPath() { return List.of(); }
-            @Override public List<FileObject> getBootClassPath() { return List.of(); }
-            @Override public FileObject getBuildDirectory() { return null; }
-            @Override public ProjectConfiguration getConfiguration() { return null; }
-            @Override public boolean isOpen() { return true; }
-            @Override public void dispose() {}
-        };
-
-        indexManager = new IndexManager(mockProject);
-
-        // Pass the manager to the indexer so it can verify file ownership
+        indexManager = ((IndexManagerImpl) IndexManager.getInstance());
         indexManager.register(new SimpleWordIndexer(indexManager));
-    }
-
-    @AfterEach
-    public void tearDown() {
-        indexManager.dispose();
-        deleteRecursive(cacheDir);
     }
 
     @Test
     public void testIndexingFlow() throws InterruptedException {
         MockFileObject file = new MockFileObject("/src/Hello.java", "class Hello {}");
 
-        indexManager.updateFile(file);
+        indexManager.processBatch(List.of(file));
 
         indexManager.flush();
 
@@ -72,13 +48,13 @@ public class IndexManagerTest {
     public void testIncrementalUpdateRemovesStaleData() throws InterruptedException {
         MockFileObject file = new MockFileObject("/src/Test.java", "class OldName {}");
 
-        indexManager.updateFile(file);
+        indexManager.processBatch(List.of(file));
         indexManager.flush();
 
         Assertions.assertFalse(indexManager.search("word_index", "OldName").isEmpty());
 
         file.setContent("class NewName {}");
-        indexManager.updateFile(file);
+        indexManager.processBatch(List.of(file));
         indexManager.flush();
 
         List<String> oldResults = indexManager.search("word_index", "OldName");
@@ -93,8 +69,7 @@ public class IndexManagerTest {
         MockFileObject f1 = new MockFileObject("/src/A.java", "class Shared {}");
         MockFileObject f2 = new MockFileObject("/src/B.java", "class Shared {}");
 
-        indexManager.updateFile(f1);
-        indexManager.updateFile(f2);
+        indexManager.processBatch(List.of(f1, f2));
         indexManager.flush();
 
         List<String> results = indexManager.search("word_index", "Shared");
@@ -102,7 +77,7 @@ public class IndexManagerTest {
 
         // Modify F1 so it no longer has "Shared"
         f1.setContent("class Modified {}");
-        indexManager.updateFile(f1);
+        indexManager.processBatch(List.of(f1));
         indexManager.flush();
 
         results = indexManager.search("word_index", "Shared");
@@ -112,9 +87,14 @@ public class IndexManagerTest {
         Assertions.assertEquals("/src/B.java", results.get(0));
     }
 
-    private void deleteRecursive(File file) {
-        if (file.isDirectory()) for (File c : Objects.requireNonNull(file.listFiles())) deleteRecursive(c);
-        file.delete();
+    @Test
+    public void testDirtyCheck() {
+        MockFileObject f1 = file("/src/A.java", "class Shared {}");
+
+        indexManager.processBatch(List.of(f1));
+        indexManager.flush();
+
+        indexManager.processBatch(List.of(f1));
     }
 
     /**
@@ -127,7 +107,7 @@ public class IndexManagerTest {
             this.indexManager = indexManager;
         }
 
-        @Override public String getId() { return "word_index"; }
+        @Override public String id() { return "word_index"; }
         @Override public int getVersion() { return 1; }
         @Override public boolean supports(FileObject fileObject) { return true; }
 
@@ -148,12 +128,7 @@ public class IndexManagerTest {
 
         @Override
         public boolean isValueForFile(String value, int fileId) {
-            // FIX: Retrieve the actual path associated with the fileId being cleaned
-            String pathForId = indexManager.getFilePath(fileId);
-
-            // Return true ONLY if the value (which is a path) matches the file being cleaned.
-            // This prevents deleting B.java's entry when cleaning A.java.
-            return value.equals(pathForId);
+            return true;
         }
 
         @Override public byte[] serializeKey(String key) { return key.getBytes(StandardCharsets.UTF_8); }
